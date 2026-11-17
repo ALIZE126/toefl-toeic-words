@@ -376,7 +376,10 @@ details > p + p { margin-top: 6px; }
 .blank-input {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 16px; line-height: 1.6;
   border: 0; border-bottom: 2px solid var(--brand); background: var(--soft); border-radius: 5px 5px 0 0;
-  padding: 0 3px; margin: 0 1px; color: inherit; min-width: 3ch;
+  padding: 0 3px; margin: 0 1px; color: inherit; letter-spacing: 0; box-sizing: border-box;
+  /* 每个缺失字母一个格子：等宽字体下 1 个字母正好 1ch */
+  background-image: linear-gradient(to right, var(--muted) 0 .72ch, transparent .72ch 1ch);
+  background-size: 1ch 1.5px; background-repeat: repeat-x; background-position: 0 calc(100% - 3px); background-origin: content-box; background-clip: content-box;
 }
 .blank-input:focus { outline: 2px solid var(--brand); outline-offset: 1px; }
 .blank-input:disabled { opacity: 1; }
