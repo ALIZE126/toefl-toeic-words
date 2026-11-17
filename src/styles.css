@@ -204,12 +204,12 @@ ul.plain { list-style: none; padding: 0; margin: 0; display: flex; flex-directio
 @media (max-width: 640px) {
   .topbar { padding: 10px 14px; }
   .tabs {
-    position: fixed; bottom: 0; left: 0; right: 0; z-index: 20; background: var(--panel); border-top: 1px solid var(--line);
+    position: fixed; bottom: var(--host-badge-h, 0px); left: 0; right: 0; z-index: 20; background: var(--panel); border-top: 1px solid var(--line);
     padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); justify-content: space-around;
   }
   .tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12px; padding: 6px; }
   .tab-icon { margin: 0; font-size: 20px; }
-  .main { padding: 12px 10px calc(84px + env(safe-area-inset-bottom)); }
+  .main { padding: 12px 10px calc(84px + var(--host-badge-h, 0px) + env(safe-area-inset-bottom)); }
   .panel, .card { padding: 14px; }
   .due-grid { grid-template-columns: repeat(2, 1fr); }
   .headword { font-size: 28px; }

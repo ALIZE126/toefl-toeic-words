@@ -7,6 +7,7 @@ import ReadingPage from "./pages/ReadingPage";
 import { getToday, toDay } from "./lib/util";
 import { DECK_NAME, deckCount } from "./lib/decks";
 import type { DeckFilter } from "./types";
+import { useAvoidHostBadge } from "./lib/hostBadge";
 
 type Tab = "review" | "reading" | "library" | "stats";
 
@@ -19,6 +20,7 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 
 export default function App() {
   const { state, update, saveError } = useStore();
+  useAvoidHostBadge();
   const [tab, setTab] = useState<Tab>("review");
   const today = getToday();
   const realToday = today === toDay();
