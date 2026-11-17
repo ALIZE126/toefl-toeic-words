@@ -75,6 +75,16 @@ export default function StatsPage({ state, update, today }: { state: AppState; u
               </small>
             </div>
           )}
+          {s.part1.practice.total > 0 && (
+            <div className="stat" data-testid="part1-practice-stat">
+              <b>{pct(s.part1.practice.firstRate)}</b>
+              <span>Part 1 练习题首听正确率</span>
+              <small>
+                首听答对 {s.part1.practice.first} · 重听后答对 {s.part1.practice.replay} · 答错 {s.part1.practice.wrong} / 共 {s.part1.practice.total}
+                （自动出题，单独统计）
+              </small>
+            </div>
+          )}
           <div className="stat">
             <b>{pct(s.spelling.rate)}</b>
             <span>生词本拼写正确率</span>

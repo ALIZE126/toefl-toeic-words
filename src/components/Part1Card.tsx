@@ -78,7 +78,10 @@ export default function Part1Card({ question, settings, onDone, speakFn = speak,
 
   return (
     <div className="card part1" data-testid="part1-card">
-      <div className="card-kind">🖼 托业 Part 1 · 听音选图{fallback && "（语音不可用，已改为看句选图）"}</div>
+      <div className="card-kind">
+        🖼 托业 Part 1 · 听音选图{question.practice && " · 练习题（不计入复习）"}
+        {fallback && "（语音不可用，已改为看句选图）"}
+      </div>
 
       {!fallback && (
         <div className="player">
@@ -174,6 +177,9 @@ export default function Part1Card({ question, settings, onDone, speakFn = speak,
             {label(result!)}
             {fallback && "（看句选图，不计入听音成绩）"}
           </div>
+          {question.practice && (
+            <div className="hint">这是自动出的练习题，干扰图没有逐题审核。如果两张图都说得通，以原句和判断依据为准。</div>
+          )}
           {!fallback && (
             <button type="button" className="btn ghost small" onClick={() => play()}>
               🔊 对着原句再听

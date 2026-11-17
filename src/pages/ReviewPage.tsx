@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Part1Card from "../components/Part1Card";
 import Part1Hub, { part1Counts } from "../components/Part1Hub";
-import { part1Questions } from "../lib/part1";
+import { resolveCardQuestion } from "../lib/part1";
 import type { AppState, Card } from "../types";
 import type { Update } from "../store";
 import {
@@ -279,7 +279,7 @@ function SessionPlayer({ state, update, today }: { state: AppState; update: Upda
     [card.id],
   );
   const p1q = useMemo(
-    () => (card.type === "part1" ? part1Questions(state).find((q) => q.key === card.exampleId && q.senseId === card.senseId) : undefined),
+    () => (card.type === "part1" ? resolveCardQuestion(state, card) : undefined),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [card.id],
   );
@@ -323,7 +323,7 @@ function SessionPlayer({ state, update, today }: { state: AppState; update: Upda
         <span>
           第 {session.index + 1} / {session.queue.length} 张 · {label}
           {card.retry ? " · 重做" : ""}
-          {card.free ? " · 自由练习" : ""}
+          {card.free ? (card.p1 ? " · 练习题" : " · 自由练习") : ""}
         </span>
         <span className="hint">剩 {remaining}</span>
         <button

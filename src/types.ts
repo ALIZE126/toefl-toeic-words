@@ -204,6 +204,8 @@ export interface Card {
   retry?: number;
   /** 自由练习：不计入排期和正确率 */
   free?: boolean;
+  /** Part 1 自动出的练习题：播报句和两张图（phrase_id），只做练习 */
+  p1?: { audio: string; options: string[]; correct: string };
 }
 
 export interface Session {
@@ -222,6 +224,8 @@ export interface Settings {
   commuteMode: boolean;
   rate: number;
   voiceURI?: string;
+  /** Part 1 练习题每轮题数，0 = 全部 */
+  part1PracticeCount?: number;
   /** 顶部选中的词库（今日复习 / 词库 / 学习记录按它筛选） */
   deck: DeckFilter;
 }

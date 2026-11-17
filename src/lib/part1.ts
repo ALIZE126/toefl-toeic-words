@@ -1,6 +1,7 @@
 import JSZip from "jszip";
 import type {
   AppState,
+  Card,
   Entry,
   Example,
   Part1ContrastGroup,
@@ -14,7 +15,7 @@ import type {
   TrackState,
 } from "../types";
 import { entryDecks } from "./decks";
-import { normalizeWord } from "./util";
+import { normalizeWord, uid } from "./util";
 
 /* ───────────── 图片包 JSON 的结构（只列用到的字段） ───────────── */
 
@@ -618,6 +619,8 @@ export interface ResolvedQuestion {
   entryId: string;
   senseId: string;
   options: { phraseId: string; entry: Entry; sense: Sense; image: Part1Image }[];
+  /** 自动出的练习题（干扰图未经审核，不进正式复习） */
+  practice?: boolean;
 }
 
 /** 可进入正式复习的题：组通过校验，且每张对照图都在词库里、有图片引用 */
@@ -693,4 +696,109 @@ export function missingImageRefs(state: AppState, keys: Set<string>): number {
   let n = 0;
   for (const e of Object.values(state.entries)) for (const s of e.senses) if (s.part1?.image && !keys.has(s.part1.image.sha256)) n++;
   return n;
+}
+
+/* ───────────── 自动出的练习题 ───────────── */
+
+/** 可做受控对照（未逐题审核，但约束清楚） */
+const CONTROLLED = "可做受控对照";
+
+export interface PracticeOptions {
+  /** 本轮题数，0 或超过可出题数 = 全部 */
+  count: number;
+  /** 只出某一类：人物动作 / 物体状态 / 位置关系 */
+  category?: string;
+  rng?: () => number;
+}
+
+type Opt = ResolvedQuestion["options"][number];
+
+function practicePool(state: AppState): Opt[] {
+  return [...part1Index(state).entries()]
+    .filter(([, v]) => v.sense.part1?.image?.sceneEn)
+    .map(([phraseId, v]) => ({ phraseId, entry: v.entry, sense: v.sense, image: v.sense.part1!.image! }));
+}
+
+/** 能出练习题的图片数（有图、有场景参考句） */
+export function practiceCount(state: AppState, category?: string): number {
+  return practicePool(state).filter((o) => !category || o.sense.part1!.categories.includes(category)).length;
+}
+
+/**
+ * 给目标短语挑一张干扰图：
+ * 1. 审核过的对照图（如 reach for ↔ hold）；
+ * 2. 同一「可做受控对照」组里的另一个短语（如 crouch in front of ↔ stand in front of）；
+ * 3. 类别不同的短语（人物动作 ↔ 物体状态 / 位置关系），降低两张图都符合原句的概率。
+ * 「不适合作为直接对照」组里的短语可能同时成立，不互相做干扰图。
+ */
+export function pickDistractor(state: AppState, target: Opt, pool: Opt[], rng: () => number = Math.random): Opt | undefined {
+  const pick = <T,>(xs: T[]) => xs[Math.floor(rng() * xs.length)];
+  const byId = new Map(pool.map((o) => [o.phraseId, o]));
+  const partners = new Set<string>();
+  for (const g of state.part1?.groups ?? []) if (g.eligible && g.phraseIds.includes(target.phraseId)) g.phraseIds.forEach((id) => partners.add(id));
+  for (const g of state.part1?.contrastGroups ?? [])
+    if (g.suitability === CONTROLLED && g.phraseIds.includes(target.phraseId)) g.phraseIds.forEach((id) => partners.add(id));
+  partners.delete(target.phraseId);
+  const reviewed = [...partners].map((id) => byId.get(id)).filter(Boolean) as Opt[];
+  if (reviewed.length) return pick(reviewed);
+
+  const avoid = new Set<string>([target.phraseId]);
+  for (const g of state.part1?.contrastGroups ?? [])
+    if (g.suitability !== CONTROLLED && g.phraseIds.includes(target.phraseId)) g.phraseIds.forEach((id) => avoid.add(id));
+  const cats = new Set(target.sense.part1!.categories);
+  const others = pool.filter((o) => !avoid.has(o.phraseId));
+  const different = others.filter((o) => !o.sense.part1!.categories.some((c) => cats.has(c)));
+  return pick(different.length ? different : others);
+}
+
+/** 生成一轮练习题：优先出练得少的短语，同样次数的随机排列 */
+export function buildPart1Practice(state: AppState, opts: PracticeOptions): Card[] {
+  const rng = opts.rng ?? Math.random;
+  const pool = practicePool(state);
+  const targets = pool.filter((o) => !opts.category || o.sense.part1!.categories.includes(opts.category));
+  const times = new Map<string, number>();
+  for (const l of state.logs) if (l.kind === "part1" && l.free && !l.retry) times.set(l.senseId, (times.get(l.senseId) ?? 0) + 1);
+  const shuffled = targets
+    .map((o) => ({ o, r: rng() }))
+    .sort((a, b) => (times.get(a.o.sense.id) ?? 0) - (times.get(b.o.sense.id) ?? 0) || a.r - b.r)
+    .map((x) => x.o);
+  const n = opts.count > 0 ? Math.min(opts.count, shuffled.length) : shuffled.length;
+  const cards: Card[] = [];
+  for (const t of shuffled.slice(0, n)) {
+    const d = pickDistractor(state, t, pool, rng);
+    if (!d) continue;
+    cards.push({
+      id: uid("c"),
+      type: "part1",
+      entryId: t.entry.id,
+      senseId: t.sense.id,
+      exampleId: `practice:${t.phraseId}:${d.phraseId}`,
+      free: true,
+      p1: { audio: t.image.sceneEn!, options: [t.phraseId, d.phraseId], correct: t.phraseId },
+    });
+  }
+  return cards;
+}
+
+/** 卡片对应的题：正式题从图片包的可判分题里找，练习题由卡片自带的定义还原 */
+export function resolveCardQuestion(state: AppState, card: Card): ResolvedQuestion | undefined {
+  if (!card.p1) return part1Questions(state).find((q) => q.key === card.exampleId && q.senseId === card.senseId);
+  const index = part1Index(state);
+  const options = card.p1.options.map((id) => {
+    const hit = index.get(id);
+    return hit?.sense.part1?.image ? { phraseId: id, entry: hit.entry, sense: hit.sense, image: hit.sense.part1.image } : null;
+  });
+  const correct = options.find((o) => o?.phraseId === card.p1!.correct);
+  if (options.some((o) => !o) || !correct) return undefined;
+  return {
+    key: card.exampleId ?? `practice:${card.p1.options.join(":")}`,
+    groupId: "practice",
+    audioText: card.p1.audio,
+    randomize: true,
+    correctPhraseId: card.p1.correct,
+    entryId: correct.entry.id,
+    senseId: correct.sense.id,
+    options: options as ResolvedQuestion["options"],
+    practice: true,
+  };
 }

@@ -331,7 +331,9 @@ export function computeStats(state: AppState, today: string) {
   const text = by("text");
   const spelling = by("spelling");
   const part1 = by("part1");
-  const part1Retries = state.logs.filter((l) => l.kind === "part1" && l.practice && l.retry);
+  const part1Retries = state.logs.filter((l) => l.kind === "part1" && l.practice && l.retry && !l.free);
+  // 自动出的练习题：每题第一次作答（不含本轮重做和看句选图）
+  const part1Practice = state.logs.filter((l) => l.kind === "part1" && l.free && !l.retry && !l.audioFallback);
   const count = (arr: ReviewLog[], r: AnyResult) => arr.filter((l) => l.result === r).length;
 
   const trackCounts = Object.fromEntries(
@@ -372,6 +374,13 @@ export function computeStats(state: AppState, today: string) {
       firstRate: rate(count(part1, "first"), part1.length),
       retries: part1Retries.length,
       retryCorrect: part1Retries.filter((l) => l.correct).length,
+      practice: {
+        total: part1Practice.length,
+        first: count(part1Practice, "first"),
+        replay: count(part1Practice, "replay"),
+        wrong: count(part1Practice, "wrong"),
+        firstRate: rate(count(part1Practice, "first"), part1Practice.length),
+      },
     },
     spelling: { total: spelling.length, correct: count(spelling, "correct"), rate: rate(count(spelling, "correct"), spelling.length) },
     passages: (() => {

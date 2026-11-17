@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { AppState, DeckFilter, Entry, Sense } from "../types";
 import type { Update } from "../store";
-import { PART1_CATEGORIES, part1Questions, sourceLabel } from "../lib/part1";
+import { PART1_CATEGORIES, buildPart1Practice, part1Questions, practiceCount, sourceLabel } from "../lib/part1";
 import { buildPart1Queue, trackKey, trackStatus } from "../lib/scheduler";
 import { scopeState } from "../lib/decks";
 import PackImage from "./PackImage";
@@ -45,10 +45,31 @@ export default function Part1Hub({ state, update, today, deck, onBack, finished 
   const scoped = scopeState(state, deck);
   const c = part1Counts(scoped, today);
 
-  const start = (free: boolean) =>
+  const start = () =>
     update((st) => ({
       ...st,
-      session: { day: today, deck, scope: "part1", index: 0, queue: buildPart1Queue(scopeState(st, deck), today, { free }) },
+      session: { day: today, deck, scope: "part1", index: 0, queue: buildPart1Queue(scopeState(st, deck), today) },
+    }));
+  const [cat, setCat] = useState<string>("all");
+  const category = cat === "all" ? undefined : cat;
+  const savedCount = state.settings.part1PracticeCount ?? 10;
+  const [countText, setCountText] = useState(savedCount ? String(savedCount) : "");
+  const available = practiceCount(scoped, category);
+  const want = savedCount === 0 ? available : Math.min(savedCount, available);
+  const setCount = (n: number) => {
+    setCountText(n ? String(n) : "");
+    update((st) => ({ ...st, settings: { ...st.settings, part1PracticeCount: n } }));
+  };
+  const startPractice = () =>
+    update((st) => ({
+      ...st,
+      session: {
+        day: today,
+        deck,
+        scope: "part1",
+        index: 0,
+        queue: buildPart1Practice(scopeState(st, deck), { count: st.settings.part1PracticeCount ?? 10, category }),
+      },
     }));
 
   if (view === "browse") return <Browse state={scoped} onBack={() => setView("home")} />;
@@ -65,7 +86,11 @@ export default function Part1Hub({ state, update, today, deck, onBack, finished 
       {finished && (
         <div className="panel done">
           <h3>🎉 这一轮听音选图做完了</h3>
-          <p>答错的题已经安排到明天复习，本轮内的重做不计入首听正确率。</p>
+          <p>
+            {state.session?.queue.some((c) => c.p1)
+              ? "练习题的结果单独记录，不进入复习排期，也不计入首听正确率。"
+              : "答错的题已经安排到明天复习，本轮内的重做不计入首听正确率。"}
+          </p>
         </div>
       )}
       {c.phrases === 0 ? (
@@ -92,15 +117,57 @@ export default function Part1Hub({ state, update, today, deck, onBack, finished 
               <p className="hint">图片包里还没有通过校验的对照题。其余图片先在「看图学短语」里学习。</p>
             ) : (
               <div className="row">
-                <button className="btn primary" disabled={c.due + c.fresh === 0} onClick={() => start(false)}>
-                  {c.due + c.fresh === 0 ? "今天没有要做的听音选图" : `开始听音选图（${c.due + c.fresh} 题）`}
-                </button>
-                <button className="btn" onClick={() => start(true)}>
-                  自由练习一遍（不计成绩）
+                <button className="btn primary" disabled={c.due + c.fresh === 0} onClick={start}>
+                  {c.due + c.fresh === 0 ? "今天没有要复习的审核题" : `开始听音选图（${c.due + c.fresh} 题）`}
                 </button>
               </div>
             )}
             <p className="hint">只有配好对照图、并确认同一句话只匹配其中一张图的题，才进入正式复习。第 1、3、7 天复习，答错的次日再考。</p>
+          </div>
+          <div className="panel p1-entry" data-testid="part1-practice">
+            <h3>🎲 练习题（自动出题）</h3>
+            <p className="hint">
+              用每张图的场景句播报，再配一张别的短语的图做干扰：优先用审核过的对照图和「可做受控对照」的组，其次用类别不同的短语。干扰图没有逐题审核，所以只算练习：不进第
+              1、3、7 天复习，也不计入首听正确率。没练过的短语优先出。
+            </p>
+            <div className="field">
+              <span>范围</span>
+              <div className="seg">
+                {["all", ...PART1_CATEGORIES].map((x) => (
+                  <button key={x} className={cat === x ? "seg-btn active" : "seg-btn"} onClick={() => setCat(x)}>
+                    {x === "all" ? "全部" : x} {practiceCount(scoped, x === "all" ? undefined : x)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="field">
+              <span>本轮题数</span>
+              <div className="seg">
+                {[5, 10, 20, 0].map((n) => (
+                  <button key={n} className={savedCount === n ? "seg-btn active" : "seg-btn"} onClick={() => setCount(n)}>
+                    {n === 0 ? "全部" : n}
+                  </button>
+                ))}
+                <input
+                  className="count-input"
+                  type="number"
+                  min={1}
+                  max={available}
+                  inputMode="numeric"
+                  aria-label="自定义题数"
+                  placeholder="自定义"
+                  value={countText}
+                  onChange={(e) => {
+                    setCountText(e.target.value);
+                    const n = Math.floor(Number(e.target.value));
+                    if (n >= 1) update((st) => ({ ...st, settings: { ...st.settings, part1PracticeCount: n } }));
+                  }}
+                />
+              </div>
+            </div>
+            <button className="btn primary" disabled={available === 0} onClick={startPractice}>
+              开始练习（{want} 题）
+            </button>
           </div>
         </>
       )}

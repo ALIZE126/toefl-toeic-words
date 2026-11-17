@@ -10,6 +10,9 @@ import {
   part1Questions,
   planPart1Import,
   readPart1Pack,
+  buildPart1Practice,
+  practiceCount,
+  resolveCardQuestion,
   storePackImages,
   type LoadedPack,
 } from "../src/lib/part1";
@@ -421,5 +424,105 @@ describe("整个应用", () => {
     fireEvent.click(screen.getByRole("button", { name: "学习记录" }));
     expect(screen.getByTestId("part1-stat").textContent).toContain("50%");
     expect(screen.getByTestId("part1-stat").textContent).toContain("本轮重做 1 次（答对 1），不计入");
+  });
+});
+
+describe("练习题（自动出题，只算练习）", () => {
+  const seeded = (seed = 1) => () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+
+  it("可以指定题数和范围；每题两张不同的图，答案是场景句对应的那张", async () => {
+    const { state } = await withPack();
+    expect(practiceCount(state)).toBe(240);
+    expect(practiceCount(state, "位置关系")).toBe(11);
+    for (const n of [5, 10, 20]) expect(buildPart1Practice(state, { count: n, rng: seeded(n) })).toHaveLength(n);
+    expect(buildPart1Practice(state, { count: 0 })).toHaveLength(240);
+    expect(buildPart1Practice(state, { count: 999 })).toHaveLength(240);
+    const loc = buildPart1Practice(state, { count: 0, category: "位置关系" });
+    expect(loc).toHaveLength(11);
+
+    const index = part1Index(state);
+    const all = buildPart1Practice(state, { count: 0, rng: seeded(7) });
+    expect(new Set(all.map((c) => c.senseId)).size).toBe(240);
+    for (const c of all) {
+      expect(c).toMatchObject({ type: "part1", free: true });
+      const [t, d] = c.p1!.options;
+      expect(t).toBe(c.p1!.correct);
+      expect(d).not.toBe(t);
+      expect(c.p1!.audio).toBe(index.get(t)!.sense.part1!.image!.sceneEn);
+      const q = resolveCardQuestion(state, c)!;
+      expect(q).toMatchObject({ practice: true, audioText: c.p1!.audio, senseId: c.senseId });
+    }
+  });
+
+  it("干扰图：先用审核过的对照图和可做受控对照组，其次类别不同；不适合直接对照的组不互相做干扰", async () => {
+    const { state } = await withPack();
+    const index = part1Index(state);
+    const all = buildPart1Practice(state, { count: 0, rng: seeded(3) });
+    const distractor = (pid: string) => all.find((c) => c.p1!.correct === pid)!.p1!.options[1];
+    expect(distractor("p153")).toBe("p078"); // reach for ↔ hold（审核过）
+    expect(distractor("p078")).toBe("p153");
+    expect(distractor("p036")).toBe("p190"); // crouch in front of ↔ stand in front of
+    expect(["p009", "p012"]).toContain(distractor("p012")); // be in ↔ be on
+    expect(distractor("p198")).toBe("p106"); // sweep ↔ mop
+
+    const unsuitable = state.part1!.contrastGroups.filter((g) => g.suitability !== "可做受控对照");
+    const controlled = new Set(state.part1!.contrastGroups.filter((g) => g.suitability === "可做受控对照").flatMap((g) => g.phraseIds));
+    for (const c of all) {
+      const [t, d] = c.p1!.options;
+      // 这两张杯子图是审核过的对照图，优先于对照组的一般结论
+      const reviewedPair = [t, d].sort().join() === "p078,p153";
+      if (!reviewedPair) for (const g of unsuitable) expect(g.phraseIds.includes(t) && g.phraseIds.includes(d), `${t} ${d} ${g.id}`).toBe(false);
+      if (controlled.has(t) || t === "p153" || t === "p078") continue;
+      const ct = index.get(t)!.sense.part1!.categories;
+      const cd = index.get(d)!.sense.part1!.categories;
+      expect(ct.some((x) => cd.includes(x)), `${t} ${d}`).toBe(false);
+    }
+  });
+
+  it("练习题不建复习进度、不计入首听正确率；单独统计；下一轮优先出没练过的", async () => {
+    const { state: s0 } = await withPack();
+    const cards = buildPart1Practice(s0, { count: 5, rng: seeded(11) });
+    let s = s0;
+    cards.forEach((c, i) => (s = recordAnswer(s, { card: c, result: i < 3 ? "first" : "wrong", day: "2026-11-17", chosen: i < 3 ? undefined : c.p1!.options[1] })));
+    expect(Object.values(s.tracks).filter((t) => t.kind === "part1")).toEqual([]);
+    const st = computeStats(s, "2026-11-17");
+    expect(st.part1).toMatchObject({ total: 0, firstRate: null, retries: 0, practice: { total: 5, first: 3, wrong: 2, firstRate: 60 } });
+    expect(confusions(s)).toEqual([]);
+    // 正式题仍然是 2 道新题
+    expect(buildPart1Queue(s, "2026-11-17")).toHaveLength(2);
+    const next = buildPart1Practice(s, { count: 235, rng: seeded(12) });
+    const done = new Set(cards.map((c) => c.senseId));
+    expect(next.some((c) => done.has(c.senseId))).toBe(false);
+  });
+
+  it("界面：选范围和题数，开始一轮练习题，提交前不显示场景句", async () => {
+    const { state } = await withPack();
+    saveState({ ...state, settings: { ...state.settings, deck: "toeic" } });
+    render(<App />);
+    fireEvent.click(screen.getByText("进入 Part 1 专项"));
+    const panel = screen.getByTestId("part1-practice");
+    expect(within(panel).getByRole("button", { name: "开始练习（10 题）" })).toBeTruthy();
+    fireEvent.click(within(panel).getByRole("button", { name: "5" }));
+    expect(within(panel).getByRole("button", { name: "开始练习（5 题）" })).toBeTruthy();
+    fireEvent.change(within(panel).getByLabelText("自定义题数"), { target: { value: "7" } });
+    expect(loadState().settings.part1PracticeCount).toBe(7);
+    fireEvent.click(within(panel).getByRole("button", { name: "位置关系 11" }));
+    fireEvent.click(within(panel).getByRole("button", { name: "全部" }));
+    expect(within(panel).getByRole("button", { name: "开始练习（11 题）" })).toBeTruthy();
+    fireEvent.click(within(panel).getByRole("button", { name: "开始练习（11 题）" }));
+
+    expect(document.body.textContent).toContain("第 1 / 11 张 · Part 1 听音选图 · 练习题");
+    const saved = loadState();
+    const card = saved.session!.queue[0];
+    expect(screen.getByTestId("part1-card").textContent).toContain("练习题（不计入复习）");
+    expect(document.body.innerHTML).not.toContain(card.p1!.audio);
+    fireEvent.click(screen.getByText("没听出来，看答案"));
+    expect(screen.getByTestId("part1-sentence").textContent).toBe(card.p1!.audio);
+    fireEvent.click(screen.getByText("下一题 →"));
+    const after = loadState();
+    expect(after.logs.at(-1)).toMatchObject({ kind: "part1", free: true, practice: true, result: "wrong" });
+    expect(Object.values(after.tracks).some((t) => t.kind === "part1")).toBe(false);
+    // 答错的练习题本轮也会重做
+    expect(after.session!.queue).toHaveLength(12);
   });
 });
