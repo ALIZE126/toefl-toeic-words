@@ -255,7 +255,7 @@ ul.plain { list-style: none; padding: 0; margin: 0; display: flex; flex-directio
 
 /* 托业 Part 1 图片 */
 .pimg { display: block; width: 100%; height: auto; border-radius: 10px; object-fit: cover; background: var(--bg); }
-.pimg.pimg-wait { display: flex; align-items: center; justify-content: center; text-align: center; color: var(--muted); font-size: 13px; padding: 10px; border: 1px dashed var(--line); }
+.pimg.pimg-wait { display: flex; flex-direction: column; gap: 6px; align-items: center; justify-content: center; text-align: center; color: var(--muted); font-size: 13px; padding: 10px; border: 1px dashed var(--line); }
 .pimg.big { max-height: 60vh; object-fit: contain; }
 .learn-img { max-width: 420px; }
 .p1-options { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }

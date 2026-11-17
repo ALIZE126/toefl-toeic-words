@@ -34,11 +34,10 @@ function openDb(): Promise<IDBDatabase> {
         // 其他标签页升级或删除数据库时，先关闭连接，避免互相卡住
         db.onversionchange = () => {
           db.close();
-          if (dbRef === db) {
-            dbRef = null;
-            dbPromise = null;
-          }
+          forget(db);
         };
+        // 浏览器单方面关闭了连接（例如 iOS 把页面切到后台后）：下次重新连接
+        db.onclose = () => forget(db);
         resolve(db);
       };
       req.onerror = () => {
@@ -48,6 +47,37 @@ function openDb(): Promise<IDBDatabase> {
     });
   }
   return dbPromise;
+}
+
+function forget(db?: IDBDatabase) {
+  if (!db || dbRef === db) {
+    dbRef = null;
+    dbPromise = null;
+  }
+}
+
+/**
+ * 执行一次读写。iOS Safari 把页面切到后台再回来时，IndexedDB 连接可能已失效
+ * （InvalidStateError / UnknownError「Connection to Indexed Database server lost」），
+ * 这时丢掉旧连接、重新打开再试一次。
+ */
+async function withDb<T>(fn: (db: IDBDatabase) => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    const db = await openDb();
+    try {
+      return await fn(db);
+    } catch (e) {
+      const name = (e as DOMException)?.name;
+      const retriable = name === "InvalidStateError" || name === "UnknownError" || name === "TransactionInactiveError" || /connection|closing|lost/i.test(String((e as Error)?.message));
+      if (attempt >= 1 || !retriable) throw e;
+      try {
+        db.close();
+      } catch {
+        /* 已关闭 */
+      }
+      forget(db);
+    }
+  }
 }
 
 function done<T>(req: IDBRequest<T>): Promise<T> {
@@ -60,15 +90,13 @@ function done<T>(req: IDBRequest<T>): Promise<T> {
 /** 本机已有哪些图片 */
 export async function listImageKeys(): Promise<Set<string>> {
   if (!imageStoreSupported()) return new Set();
-  const db = await openDb();
-  const keys = await done(db.transaction(STORE).objectStore(STORE).getAllKeys());
+  const keys = await withDb((db) => done(db.transaction(STORE).objectStore(STORE).getAllKeys()));
   return new Set(keys.map(String));
 }
 
 export async function putImages(items: { sha256: string; type: string; data: ArrayBuffer }[]): Promise<void> {
   if (!items.length) return;
-  const db = await openDb();
-  await new Promise<void>((resolve, reject) => {
+  await withDb((db) => new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORE, "readwrite");
     const store = tx.objectStore(STORE);
     for (const it of items) store.put({ sha256: it.sha256, type: it.type, data: it.data } satisfies Stored);
@@ -76,18 +104,17 @@ export async function putImages(items: { sha256: string; type: string; data: Arr
     tx.onerror = () => reject(tx.error ?? new Error("保存图片失败"));
     tx.onabort = () =>
       reject(tx.error?.name === "QuotaExceededError" ? new Error("浏览器存储空间不足，图片没有全部保存") : (tx.error ?? new Error("保存图片被中止")));
-  });
+  }));
 }
 
 const urlCache = new Map<string, string>();
 
-/** 取图片的 object URL；本机没有这张图时返回 null */
+/** 取图片的 object URL；本机确实没有这张图时返回 null，读取出错时抛出异常 */
 export async function getImageUrl(sha256: string): Promise<string | null> {
   const cached = urlCache.get(sha256);
   if (cached) return cached;
   if (!imageStoreSupported()) return null;
-  const db = await openDb();
-  const rec = (await done(db.transaction(STORE).objectStore(STORE).get(sha256))) as Stored | undefined;
+  const rec = (await withDb((db) => done(db.transaction(STORE).objectStore(STORE).get(sha256)))) as Stored | undefined;
   if (!rec) return null;
   const url = URL.createObjectURL(new Blob([rec.data], { type: rec.type || "image/webp" }));
   urlCache.set(sha256, url);
@@ -101,6 +128,12 @@ export async function requestPersistence(): Promise<void> {
   } catch {
     /* 忽略 */
   }
+}
+
+/** 测试用：模拟浏览器在后台单方面关掉连接（不通知页面） */
+export function dropConnectionForTests() {
+  urlCache.clear();
+  dbRef?.close();
 }
 
 /** 测试用：清空缓存和连接 */

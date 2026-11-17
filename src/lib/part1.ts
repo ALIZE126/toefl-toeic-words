@@ -691,6 +691,13 @@ export function confusions(state: AppState, logs: ReviewLog[] = state.logs) {
     });
 }
 
+/** 词条引用了多少张图片 */
+export function imageRefCount(state: AppState): number {
+  let n = 0;
+  for (const e of Object.values(state.entries)) for (const s of e.senses) if (s.part1?.image) n++;
+  return n;
+}
+
 /** 本机缺少图片的词条数（恢复备份后用来提示重新绑定图片包） */
 export function missingImageRefs(state: AppState, keys: Set<string>): number {
   let n = 0;

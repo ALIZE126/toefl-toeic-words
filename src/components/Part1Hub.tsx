@@ -5,6 +5,7 @@ import { PART1_CATEGORIES, buildPart1Practice, part1Questions, practiceCount, so
 import { buildPart1Queue, trackKey, trackStatus } from "../lib/scheduler";
 import { scopeState } from "../lib/decks";
 import PackImage from "./PackImage";
+import ImageStatus from "./ImageStatus";
 import { Pill, SpeakButton } from "./common";
 
 interface Props {
@@ -82,6 +83,7 @@ export default function Part1Hub({ state, update, today, deck, onBack, finished 
         </button>
         <h2>托业 Part 1 专项</h2>
         <p className="hint">训练听到动作或状态短语后，马上在照片里认出对应的画面。</p>
+        <ImageStatus state={state} />
       </div>
       {finished && (
         <div className="panel done">

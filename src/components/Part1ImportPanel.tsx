@@ -11,6 +11,7 @@ import {
   type Part1Report,
 } from "../lib/part1";
 import { imageStoreSupported, listImageKeys, putImages, requestPersistence } from "../lib/imageStore";
+import ImageStatus from "./ImageStatus";
 
 /** 词库 → 托业：导入 Part 1 图片词库（ZIP）。先预览，确认后写入 */
 export default function Part1ImportPanel({ state, update }: { state: AppState; update: Update }) {
@@ -69,6 +70,7 @@ export default function Part1ImportPanel({ state, update }: { state: AppState; u
         IndexedDB 里。
       </p>
       {!imageStoreSupported() && <div className="banner error">当前浏览器不支持 IndexedDB，图片无法保存。</div>}
+      <ImageStatus state={state} showOk />
       <div className="row">
         <button className="btn primary" disabled={!!busy} onClick={() => fileRef.current?.click()}>
           {busy ?? "导入 Part 1 图片词库 (.zip)"}

@@ -16,7 +16,7 @@ import {
   storePackImages,
   type LoadedPack,
 } from "../src/lib/part1";
-import { getImageUrl, listImageKeys, putImages, resetImageStoreForTests } from "../src/lib/imageStore";
+import { dropConnectionForTests, getImageUrl, listImageKeys, putImages, resetImageStoreForTests } from "../src/lib/imageStore";
 import { advanceSession, buildPart1Queue, buildQueue, computeStats, introduce, recordAnswer, trackKey, trackStatus } from "../src/lib/scheduler";
 import { deckCount, scopeState } from "../src/lib/decks";
 import { loadState, saveState } from "../src/lib/storage";
@@ -524,5 +524,34 @@ describe("练习题（自动出题，只算练习）", () => {
     expect(Object.values(after.tracks).some((t) => t.kind === "part1")).toBe(false);
     // 答错的练习题本轮也会重做
     expect(after.session!.queue).toHaveLength(12);
+  });
+});
+
+describe("下次打开时图片仍能加载", () => {
+  it("浏览器在后台关掉了 IndexedDB 连接（iOS 常见）：自动重连，图片照常读取", async () => {
+    const { state } = await withPack();
+    const sha = part1Index(state).get("p001")!.sense.part1!.image!.sha256;
+    expect(await getImageUrl(sha)).toMatch(/^blob:/);
+    dropConnectionForTests();
+    expect(await getImageUrl(sha)).toMatch(/^blob:/);
+    dropConnectionForTests();
+    expect((await listImageKeys()).size).toBe(240);
+  });
+
+  it("图片不在本机时，专项页和导入面板会提示重新选择 ZIP 补齐", async () => {
+    const { state } = await withPack();
+    saveState({ ...state, settings: { ...state.settings, deck: "toeic" } });
+    await clearImages(); // 模拟换了网址或浏览器：词库还在，图片不在
+    render(<App />);
+    fireEvent.click(screen.getByText("进入 Part 1 专项"));
+    expect((await screen.findByTestId("image-status")).textContent).toContain("有 240 / 240 个词条的图片不在这台设备的浏览器里");
+  });
+
+  it("图片都在时，导入面板显示本机图片库状态", async () => {
+    const { state } = await withPack();
+    saveState({ ...state, settings: { ...state.settings, deck: "toeic" } });
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "词库" }));
+    expect((await screen.findByTestId("image-status")).textContent).toBe("本机图片库：240 张，词条引用的 240 张都在。");
   });
 });

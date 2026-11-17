@@ -13,7 +13,9 @@ interface Props {
 
 /** 从本机 IndexedDB 读取图片包里的图片 */
 export default function PackImage({ image, alt, className = "", compact }: Props) {
+  // undefined = 加载中；null = 本机没有；"error" = 读取失败（图片可能还在，可以重试）
   const [url, setUrl] = useState<string | null | undefined>(undefined);
+  const [tries, setTries] = useState(0);
   useEffect(() => {
     let alive = true;
     if (!image) {
@@ -23,14 +25,30 @@ export default function PackImage({ image, alt, className = "", compact }: Props
     setUrl(undefined);
     getImageUrl(image.sha256)
       .then((u) => alive && setUrl(u))
-      .catch(() => alive && setUrl(null));
+      .catch(() => alive && setUrl("error"));
     return () => {
       alive = false;
     };
-  }, [image?.sha256]);
+  }, [image?.sha256, tries]);
 
   const ratio = image?.width && image?.height ? `${image.width} / ${image.height}` : "4 / 3";
   if (url === undefined) return <div className={`pimg pimg-wait ${className}`} style={{ aspectRatio: ratio }} aria-label="图片加载中" />;
+  if (url === "error")
+    return (
+      <div className={`pimg pimg-wait missing ${className}`} style={{ aspectRatio: ratio }} role="img" aria-label={alt}>
+        <span>{compact ? "读取失败" : "图片读取失败（浏览器的本地存储暂时不可用）"}</span>
+        <button
+          type="button"
+          className="btn small"
+          onClick={(e) => {
+            e.stopPropagation();
+            setTries((n) => n + 1);
+          }}
+        >
+          重试
+        </button>
+      </div>
+    );
   if (url === null)
     return (
       <div className={`pimg pimg-wait missing ${className}`} style={{ aspectRatio: ratio }} role="img" aria-label={alt}>
