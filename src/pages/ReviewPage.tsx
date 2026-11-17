@@ -23,7 +23,7 @@ import TextCard from "../components/TextCard";
 import LearnCard from "../components/LearnCard";
 import SpellingCard from "../components/SpellingCard";
 import { spellingItems } from "../lib/spelling";
-import { englishVoices, loadVoices, speechSupported } from "../lib/speech";
+import { englishVoices, isAppleMobile, loadVoices, speechSupported } from "../lib/speech";
 import { DECK_NAME, scopeState } from "../lib/decks";
 
 interface Props {
@@ -230,6 +230,16 @@ function Overview({
             value={s.rate}
             onChange={(e) => update((st) => ({ ...st, settings: { ...st.settings, rate: Number(e.target.value) } }))}
           />
+        </label>
+        <label className="setting">
+          <input
+            type="checkbox"
+            checked={s.audioHandoff ?? isAppleMobile()}
+            onChange={(e) => update((st) => ({ ...st, settings: { ...st.settings, audioHandoff: e.target.checked } }))}
+          />
+          <span>
+            <b>播放时把耳机切到这台设备</b>：AirPods 同时连着 Mac 和 iPhone 时，点播放会先让耳机切过来（第一次播放约等 1 秒）
+          </span>
         </label>
         <VoicePicker state={state} update={update} />
       </div>

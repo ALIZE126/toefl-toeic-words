@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Entry, Example, ListenResult, Sense, Settings, ContextResult } from "../types";
 import type { Choice } from "../lib/questions";
-import { speak, stopSpeaking } from "../lib/speech";
+import { speak, speechOptions, stopSpeaking } from "../lib/speech";
 import { displayWord } from "../lib/library";
 import { ChoiceList, Highlight, PhoneticLine } from "./common";
 import { RESULT_LABEL } from "../lib/scheduler";
@@ -42,7 +42,7 @@ export default function ListeningCard({ entry, sense, example, prompt, choices, 
 
   const play = async (slow = false, auto = false) => {
     setPlaying(true);
-    const r = await speakFn(example.text, { rate: slow ? 0.7 : settings.rate, voiceURI: settings.voiceURI });
+    const r = await speakFn(example.text, speechOptions(settings, slow));
     setPlaying(false);
     if (r.ok) {
       setError(null);

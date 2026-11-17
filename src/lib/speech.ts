@@ -43,8 +43,106 @@ function pickVoice(voiceURI?: string): SpeechSynthesisVoice | undefined {
 /**
  * 朗读一句英文。播放成功开始返回 ok；不支持 / 没有英文语音 / 出错 / 超时没有开始播放时返回原因。
  */
-export async function speak(text: string, opts: { rate?: number; voiceURI?: string } = {}): Promise<SpeakOutcome> {
+export interface SpeakOptions {
+  rate?: number;
+  voiceURI?: string;
+  /** 先把耳机切过来（见 startHandoff） */
+  handoff?: boolean;
+}
+
+/** iPhone / iPad（iPadOS 的 Safari 会伪装成 Mac，用触点数区分） */
+export function isAppleMobile(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && (navigator.maxTouchPoints ?? 0) > 1);
+}
+
+export function speechOptions(settings: { rate: number; voiceURI?: string; audioHandoff?: boolean }, slow = false): SpeakOptions {
+  return { rate: slow ? 0.7 : settings.rate, voiceURI: settings.voiceURI, handoff: settings.audioHandoff ?? isAppleMobile() };
+}
+
+/* ───────────── 耳机自动切换 ─────────────
+ * AirPods 的「自动切换」只在设备开始「媒体播放」时触发。浏览器语音合成不算媒体播放，
+ * 所以点播放时先用 <audio> 播一段静音，让系统把耳机切过来，再开始朗读。
+ */
+
+/** 等耳机切过来的时间 */
+export const HANDOFF_WAIT_MS = 1200;
+/** 这段时间内播放过就认为耳机已经在这台设备上，不再等待 */
+const HANDOFF_WARM_MS = 60_000;
+let handoffAudio: HTMLAudioElement | null = null;
+let lastHandoff = 0;
+
+function silentWavUrl(seconds = 3): string {
+  const rate = 8000;
+  const n = rate * seconds;
+  const buf = new ArrayBuffer(44 + n * 2);
+  const v = new DataView(buf);
+  const str = (o: number, s: string) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  str(0, "RIFF");
+  v.setUint32(4, 36 + n * 2, true);
+  str(8, "WAVEfmt ");
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true);
+  v.setUint32(28, rate * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  str(36, "data");
+  v.setUint32(40, n * 2, true);
+  return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+}
+
+/**
+ * 必须在点击事件里同步调用（iOS 只允许用户点击时开始播放）。
+ * 返回 true 表示耳机可能还在别的设备上，需要等一下再朗读。
+ */
+export function startHandoff(): boolean {
+  if (typeof window === "undefined" || typeof Audio === "undefined") return false;
+  const now = Date.now();
+  const cold = now - lastHandoff > HANDOFF_WARM_MS;
+  lastHandoff = now;
+  if (!cold) return false;
   try {
+    // Safari 16.4+：把网页音频当作媒体播放（静音开关打开时也能出声）
+    const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
+    if (session) session.type = "playback";
+  } catch {
+    /* 不支持就算了 */
+  }
+  try {
+    handoffAudio ??= Object.assign(new Audio(silentWavUrl()), { loop: true });
+    handoffAudio.setAttribute("playsinline", "");
+    handoffAudio.currentTime = 0;
+    void handoffAudio.play().catch(() => {});
+  } catch {
+    return false;
+  }
+  return true;
+}
+
+function stopHandoffAudio() {
+  try {
+    handoffAudio?.pause();
+  } catch {
+    /* 忽略 */
+  }
+}
+
+/** 测试用 */
+export function resetHandoffForTests() {
+  handoffAudio = null;
+  lastHandoff = 0;
+}
+
+export async function speak(text: string, opts: SpeakOptions = {}): Promise<SpeakOutcome> {
+  // 第一个 await 之前同步开始静音播放，仍在用户点击的事件里
+  const wait = opts.handoff ? startHandoff() : false;
+  try {
+    if (wait) {
+      await new Promise((r) => setTimeout(r, HANDOFF_WAIT_MS));
+      stopHandoffAudio();
+    }
     return await speakInner(text, opts);
   } catch (e) {
     // 浏览器的语音接口抛异常时也要给出提示，不能让播放按钮一直停在「播放中」
@@ -52,7 +150,7 @@ export async function speak(text: string, opts: { rate?: number; voiceURI?: stri
   }
 }
 
-async function speakInner(text: string, opts: { rate?: number; voiceURI?: string }): Promise<SpeakOutcome> {
+async function speakInner(text: string, opts: SpeakOptions): Promise<SpeakOutcome> {
   if (!speechSupported()) return { ok: false, reason: "当前浏览器不支持语音合成（Web Speech API）。" };
   const voices = await loadVoices();
   const synth = window.speechSynthesis;

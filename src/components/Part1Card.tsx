@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Part1Result, Settings } from "../types";
 import type { ResolvedQuestion } from "../lib/part1";
-import { speak, stopSpeaking } from "../lib/speech";
+import { speak, speechOptions, stopSpeaking } from "../lib/speech";
 import PackImage from "./PackImage";
 
 export interface Part1Done {
@@ -49,7 +49,7 @@ export default function Part1Card({ question, settings, onDone, speakFn = speak,
 
   const play = async (slow = false, auto = false) => {
     setPlaying(true);
-    const r = await speakFn(question.audioText, { rate: slow ? 0.7 : settings.rate, voiceURI: settings.voiceURI });
+    const r = await speakFn(question.audioText, speechOptions(settings, slow));
     setPlaying(false);
     if (r.ok) {
       setError(null);

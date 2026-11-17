@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { splitHighlight } from "../lib/util";
-import { speak } from "../lib/speech";
+import { speak, speechOptions } from "../lib/speech";
 import type { Choice } from "../lib/questions";
 import type { Entry, Settings } from "../types";
 import { parsePhonetic } from "../lib/meaning";
@@ -23,7 +23,7 @@ export function SpeakButton({ text, settings, label = "🔊", slow }: { text: st
         className="btn ghost small"
         aria-label={`朗读：${text}`}
         onClick={async () => {
-          const r = await speak(text, { rate: slow ? 0.7 : settings.rate, voiceURI: settings.voiceURI });
+          const r = await speak(text, speechOptions(settings, slow));
           setErr(r.ok ? null : r.reason);
         }}
       >

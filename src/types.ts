@@ -224,6 +224,8 @@ export interface Settings {
   commuteMode: boolean;
   rate: number;
   voiceURI?: string;
+  /** 播放前先用一段静音的媒体播放把耳机（AirPods）切到这台设备；未设置时 iPhone / iPad 默认开启 */
+  audioHandoff?: boolean;
   /** Part 1 练习题每轮题数，0 = 全部 */
   part1PracticeCount?: number;
   /** 顶部选中的词库（今日复习 / 词库 / 学习记录按它筛选） */

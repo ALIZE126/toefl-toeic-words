@@ -10,5 +10,7 @@ export default defineConfig({
     environment: "jsdom",
     include: ["tests/**/*.test.{ts,tsx}"],
     setupFiles: ["tests/setup.ts"],
+    // 多个测试同时读 21 MB 的图片包时会变慢
+    testTimeout: 20000,
   },
 });
