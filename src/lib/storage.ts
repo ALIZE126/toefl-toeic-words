@@ -1,4 +1,5 @@
 import type { AppState } from "../types";
+import { migrateDecks } from "./decks";
 
 export const STORAGE_KEY = "toefl-toeic-words/v1";
 
@@ -9,7 +10,7 @@ export function emptyState(): AppState {
     order: [],
     tracks: {},
     logs: [],
-    settings: { newPerDay: 10, commuteMode: false, rate: 0.95 },
+    settings: { newPerDay: 10, commuteMode: false, rate: 0.95, deck: "all" },
     imports: [],
     passageAttempts: [],
   };
@@ -22,7 +23,7 @@ export function loadState(storage: Storage = localStorage): AppState {
     const parsed = JSON.parse(raw) as AppState;
     if (parsed?.version !== 1 || typeof parsed.entries !== "object") return emptyState();
     const base = emptyState();
-    return { ...base, ...parsed, settings: { ...base.settings, ...parsed.settings } };
+    return migrateDecks({ ...base, ...parsed, settings: { ...base.settings, ...parsed.settings } });
   } catch {
     return emptyState();
   }
@@ -48,5 +49,5 @@ export function parseBackup(text: string): AppState {
     throw new Error("不是本应用导出的备份文件");
   }
   const base = emptyState();
-  return { ...base, ...parsed, settings: { ...base.settings, ...parsed.settings } };
+  return migrateDecks({ ...base, ...parsed, settings: { ...base.settings, ...parsed.settings } });
 }

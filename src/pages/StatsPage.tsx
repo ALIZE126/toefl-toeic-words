@@ -4,20 +4,23 @@ import type { Update } from "../store";
 import { KIND_LABEL, KIND_ORDER, RESULT_LABEL, computeStats } from "../lib/scheduler";
 import { displayWord } from "../lib/library";
 import { exportBackup, parseBackup } from "../lib/storage";
+import { DECK_NAME, scopeState } from "../lib/decks";
 
 export default function StatsPage({ state, update, today }: { state: AppState; update: Update; today: string }) {
-  const s = computeStats(state, today);
+  const deck = state.settings.deck;
+  const scoped = scopeState(state, deck);
+  const s = computeStats(scoped, today);
   const fileRef = useRef<HTMLInputElement>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const pct = (v: number | null) => (v === null ? "—" : `${v}%`);
   const maxDay = Math.max(1, ...s.days.map((d) => d.reviews + d.learned));
 
-  const recent = state.logs
+  const recent = scoped.logs
     .filter((l) => l.kind !== "learn")
     .slice(-30)
     .reverse();
 
-  const weak = Object.values(state.tracks)
+  const weak = Object.values(scoped.tracks)
     .filter((t) => t.lapses > 0)
     .sort((a, b) => b.lapses - a.lapses)
     .slice(0, 10);
@@ -34,7 +37,9 @@ export default function StatsPage({ state, update, today }: { state: AppState; u
   return (
     <section className="stack">
       <div className="panel">
-        <h2>学习记录</h2>
+        <h2>
+          学习记录{deck !== "all" && <span className="hint"> · {DECK_NAME[deck]}词库</span>}
+        </h2>
         <div className="stat-grid">
           <div className="stat">
             <b>{pct(s.listening.firstRate)}</b>
@@ -74,10 +79,12 @@ export default function StatsPage({ state, update, today }: { state: AppState; u
           <div className="stat">
             <b>{s.learnedSenses}</b>
             <span>已学义项</span>
-            <small>词库共 {state.order.length} 个词条</small>
+            <small>
+              {DECK_NAME[deck]}词库共 {scoped.order.length} 个词条
+            </small>
           </div>
         </div>
-        <p className="hint">正确率只统计正式复习；初学当天的回忆、本轮内的重做和语音不可用时的文字替代题不计入。</p>
+        <p className="hint">补全单词短文得分不分词库。正确率只统计正式复习；初学当天的回忆、本轮内的重做和语音不可用时的文字替代题不计入。</p>
       </div>
 
       <div className="panel">

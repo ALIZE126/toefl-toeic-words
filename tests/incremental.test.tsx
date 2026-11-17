@@ -88,14 +88,17 @@ describe("增量导入：界面", () => {
     s = introduce(s, "glacier", "glacier#ice", "2026-11-16");
     saveState(s);
     render(<App />);
-    fireEvent.click(screen.getByText("词库"));
+    fireEvent.click(screen.getByRole("button", { name: "词库" }));
     expect((screen.getByLabelText(/只新增词库里没有的词/) as HTMLInputElement).checked).toBe(true);
+    // 顶部选的是「全部」时，必须先选导入到哪个词库
+    expect(screen.getByText("先选择导入到哪个词库").closest("button")!.disabled).toBe(true);
+    fireEvent.click(screen.getByLabelText("托福词库"));
 
     const data = await expandedDocx(NEW);
     const file = new File([data.slice().buffer as ArrayBuffer], "生词本-全量.docx");
     fireEvent.change(screen.getByTestId("docx-input"), { target: { files: [file] } });
     const status = await screen.findByRole("status", {}, { timeout: 5000 });
-    expect(status.textContent).toContain("增量导入「生词本-全量.docx」：读取 262 条，新增 3 个，词库已有 258 个（未改动）");
+    expect(status.textContent).toContain("增量导入「生词本-全量.docx」到托福词库：读取 262 条，新增 3 个，词库已有 258 个（内容未改动）");
     expect(screen.getByTestId("added-words").textContent).toContain("sediment、plateau、Permanent");
     // 拼写还没确认时，Permanent 是一个新词
 

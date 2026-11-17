@@ -248,3 +248,7 @@ ul.plain { list-style: none; padding: 0; margin: 0; display: flex; flex-directio
 .import-mode legend { color: var(--muted); font-size: 13px; padding: 0 4px; }
 .import-mode label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
 .import-mode input { margin-top: 3px; }
+.deck-bar { display: flex; align-items: center; gap: 6px; padding: 8px 16px; background: var(--panel); border-bottom: 1px solid var(--line); justify-content: center; flex-wrap: wrap; }
+.deck-choice { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 15px; margin-right: 12px; }
+.deck-choice input { width: 18px; height: 18px; }
+.deck-edit { margin-top: 6px; }

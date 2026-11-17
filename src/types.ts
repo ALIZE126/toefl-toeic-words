@@ -63,10 +63,16 @@ export interface Entry {
   note: string;
   /** 是否属于内置的 30 个配好练习的词条 */
   curated: boolean;
+  /** 所在词库 */
+  decks: DeckId[];
   source: { file: string; row: number; firstImportedAt: string; lastImportedAt: string };
   createdAt: string;
   updatedAt: string;
 }
+
+/** 词库：托福 / 托业。一个词可以同时属于两个词库，复习进度共享 */
+export type DeckId = "toefl" | "toeic";
+export type DeckFilter = DeckId | "all";
 
 export type Grade = "pass" | "hard" | "fail";
 
@@ -145,6 +151,8 @@ export interface Card {
 
 export interface Session {
   day: string;
+  /** 本轮复习的词库范围 */
+  deck?: DeckFilter;
   queue: Card[];
   index: number;
 }
@@ -155,6 +163,8 @@ export interface Settings {
   commuteMode: boolean;
   rate: number;
   voiceURI?: string;
+  /** 顶部选中的词库（今日复习 / 词库 / 学习记录按它筛选） */
+  deck: DeckFilter;
 }
 
 export interface ImportRecord {
@@ -166,6 +176,10 @@ export interface ImportRecord {
   unchanged: number;
   /** addOnly = 只新增词库里没有的词；merge = 同时更新已有词的原始音标 / 释义 */
   mode?: ImportMode;
+  /** 导入到哪个词库 */
+  deck?: DeckId;
+  /** 已有词条中，本次新加入这个词库的数量 */
+  deckAdded?: number;
 }
 
 export type ImportMode = "addOnly" | "merge";

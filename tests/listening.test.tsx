@@ -137,7 +137,7 @@ describe("整个应用：今日复习与词库状态", () => {
     saveState(state);
 
     render(<App />);
-    fireEvent.click(screen.getByText("词库"));
+    fireEvent.click(screen.getByRole("button", { name: "词库" }));
     fireEvent.click(screen.getByText("学习中"));
     const row = screen.getByText("seminar").closest("button")!;
     expect(row.textContent).toContain("文字已掌握");

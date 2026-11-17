@@ -225,7 +225,7 @@ export function newQuota(state: AppState, day: string): number {
  * 今日队列：先听力（避免先看到文字）、再新句理解、再文字回忆，最后是新学。
  * 新学：学习句卡 → 隔几张后主动回忆。
  */
-export function buildQueue(state: AppState, day: string, opts: { includeNew?: boolean } = {}): Card[] {
+export function buildQueue(state: AppState, day: string, opts: { includeNew?: boolean; quota?: number } = {}): Card[] {
   const cards: Card[] = [];
   for (const t of dueTracks(state, day)) {
     const found = findSense(state, t.entryId, t.senseId)!;
@@ -235,7 +235,7 @@ export function buildQueue(state: AppState, day: string, opts: { includeNew?: bo
     cards.push({ id: uid("c"), type: t.kind, entryId: t.entryId, senseId: t.senseId, exampleId });
   }
   if (opts.includeNew !== false) {
-    const fresh = newCandidates(state).slice(0, newQuota(state, day));
+    const fresh = newCandidates(state).slice(0, opts.quota ?? newQuota(state, day));
     const recalls: Card[] = [];
     fresh.forEach((f, i) => {
       const found = findSense(state, f.entryId, f.senseId)!;

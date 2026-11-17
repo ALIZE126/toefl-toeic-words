@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
-import type { AppState, ImportMode } from "../types";
+import type { AppState, DeckId, ImportMode } from "../types";
+import { DECKS, DECK_NAME, entryDecks, scopeState } from "../lib/decks";
 import type { Update } from "../store";
 import { parseDocx } from "../lib/docx";
 import { displayWord, importRows, senseReady, type ImportReport } from "../lib/library";
@@ -25,15 +26,19 @@ export default function LibraryPage({ state, update, today }: { state: AppState;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<ImportMode>("addOnly");
+  const viewDeck = state.settings.deck;
+  const [importDeck, setImportDeck] = useState<DeckId | null>(viewDeck === "all" ? null : viewDeck);
+  const scoped = useMemo(() => scopeState(state, viewDeck), [state, viewDeck]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const onFile = async (file: File) => {
+    if (!importDeck) return;
     setBusy(true);
     setError(null);
     setReport(null);
     try {
       const parsed = await parseDocx(await file.arrayBuffer());
-      const r = importRows(state, parsed.rows, file.name, undefined, { mode: state.order.length ? mode : "merge" });
+      const r = importRows(state, parsed.rows, file.name, undefined, { mode: state.order.length ? mode : "merge", deck: importDeck });
       update(() => r.state);
       setReport(r.report);
     } catch (e) {
@@ -47,11 +52,12 @@ export default function LibraryPage({ state, update, today }: { state: AppState;
   // 最近一次有新增的导入，用于「上次新增」筛选
   const lastAdd = state.imports.slice(1).reverse().find((r) => r.added > 0);
   const learnedEntries = useMemo(() => new Set(Object.values(state.tracks).map((t) => t.entryId)), [state.tracks]);
+  const total = scoped.order.length;
 
   const list = useMemo(() => {
     const kw = q.trim().toLowerCase();
-    return state.order
-      .map((id) => state.entries[id])
+    return scoped.order
+      .map((id) => scoped.entries[id])
       .filter(Boolean)
       .filter((e) => {
         if (kw && !(e.word.toLowerCase().includes(kw) || e.meaning.includes(kw) || e.senses.some((s) => s.gloss.includes(kw)))) return false;
@@ -70,25 +76,41 @@ export default function LibraryPage({ state, update, today }: { state: AppState;
             return true;
         }
       });
-  }, [state.order, state.entries, q, filter, learnedEntries, lastAdd]);
+  }, [scoped, q, filter, learnedEntries, lastAdd]);
 
   const open = openId ? state.entries[openId] : undefined;
   if (open) return <EntryEditor entry={open} state={state} update={update} today={today} onClose={() => setOpenId(null)} />;
 
-  const total = state.order.length;
-  const curated = state.order.filter((id) => state.entries[id]?.curated).length;
-  const spelling = state.order.filter((id) => state.entries[id]?.spelling?.status === "pending").length;
+  const curated = scoped.order.filter((id) => scoped.entries[id]?.curated).length;
+  const spelling = scoped.order.filter((id) => scoped.entries[id]?.spelling?.status === "pending").length;
+  const hasAny = state.order.length > 0;
 
   return (
     <section className="stack">
       <div className="panel">
-        <h2>词库</h2>
+        <h2>{viewDeck === "all" ? "词库" : `${DECK_NAME[viewDeck]}词库`}</h2>
         <p className="hint">
           共 {total} 个词条 · 已配练习 {curated} 个 · 疑似拼写待确认 {spelling} 个
         </p>
+        <fieldset className="import-mode">
+          <legend>导入到</legend>
+          <div className="row">
+            {DECKS.map((d) => (
+              <label key={d.id} className="deck-choice">
+                <input type="radio" name="import-deck" checked={importDeck === d.id} onChange={() => setImportDeck(d.id)} />
+                <span>{d.name}词库</span>
+              </label>
+            ))}
+          </div>
+          <span className="hint">词库里已有的词会同时加入所选词库，复习进度共享。</span>
+        </fieldset>
         <div className="row">
-          <button className="btn primary" disabled={busy} onClick={() => fileRef.current?.click()}>
-            {busy ? "正在读取…" : total ? "重新导入 / 导入新词本 (.docx)" : "导入 Word 生词本 (.docx)"}
+          <button className="btn primary" disabled={busy || !importDeck} onClick={() => fileRef.current?.click()}>
+            {busy
+              ? "正在读取…"
+              : !importDeck
+                ? "先选择导入到哪个词库"
+                : `导入生词本到${DECK_NAME[importDeck]}词库 (.docx)`}
           </button>
           <input
             ref={fileRef}
@@ -99,9 +121,9 @@ export default function LibraryPage({ state, update, today }: { state: AppState;
             onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
           />
         </div>
-        {total > 0 && (
+        {hasAny && (
           <fieldset className="import-mode">
-            <legend>再次导入时</legend>
+            <legend>词库里已有词时</legend>
             <label>
               <input type="radio" name="import-mode" checked={mode === "addOnly"} onChange={() => setMode("addOnly")} />
               <span>
@@ -122,12 +144,20 @@ export default function LibraryPage({ state, update, today }: { state: AppState;
           <div className="banner good" role="status">
             {report.mode === "addOnly" ? (
               <>
-                增量导入「{report.file}」：读取 {report.total} 条，新增 {report.added} 个，词库已有 {report.skippedExisting} 个（未改动）。
+                增量导入「{report.file}」到{DECK_NAME[report.deck ?? "toefl"]}词库：读取 {report.total} 条，新增 {report.added} 个，词库已有{" "}
+                {report.skippedExisting} 个（内容未改动）。
               </>
             ) : (
               <>
-                导入「{report.file}」：读取 {report.total} 条，新增 {report.added}，原始内容有变化 {report.updated}，未变 {report.unchanged}。
+                导入「{report.file}」到{DECK_NAME[report.deck ?? "toefl"]}词库：读取 {report.total} 条，新增 {report.added}，原始内容有变化 {report.updated}，未变{" "}
+                {report.unchanged}。
               </>
+            )}
+            {report.deckAddedWords.length > 0 && (
+              <div data-testid="deck-added">
+                其中 {report.deckAddedWords.length} 个已有的词同时加入了{DECK_NAME[report.deck ?? "toefl"]}词库：{report.deckAddedWords.slice(0, 20).join("、")}
+                {report.deckAddedWords.length > 20 && " 等"}
+              </div>
             )}
             {report.duplicatesInFile.length > 0 && <> 文件内重复 {report.duplicatesInFile.length} 条已跳过。</>}
             {report.spellingFlags > 0 && <> 有 {report.spellingFlags} 个词条疑似拼写错误，请在「疑似拼写」里确认。</>}
@@ -167,6 +197,7 @@ export default function LibraryPage({ state, update, today }: { state: AppState;
                     <span className="wr-meaning">{e.meaning}</span>
                   </span>
                   <span className="wr-tags">
+                    {viewDeck === "all" && entryDecks(e).map((d) => <Pill key={d}>{DECK_NAME[d]}</Pill>)}
                     {e.curated && <Pill tone="info">已配练习</Pill>}
                     {e.spelling?.status === "pending" && <Pill tone="warn">疑似拼写</Pill>}
                     {e.senses.length > 1 && <Pill>{e.senses.length} 个义项</Pill>}

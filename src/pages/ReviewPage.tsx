@@ -11,7 +11,6 @@ import {
   newCandidates,
   newQuota,
   recordAnswer,
-  startSession,
   toGrade,
 } from "../lib/scheduler";
 import { contextChoices, listenChoices } from "../lib/questions";
@@ -22,6 +21,7 @@ import LearnCard from "../components/LearnCard";
 import SpellingCard from "../components/SpellingCard";
 import { spellingItems } from "../lib/spelling";
 import { englishVoices, loadVoices, speechSupported } from "../lib/speech";
+import { DECK_NAME, scopeState } from "../lib/decks";
 
 interface Props {
   state: AppState;
@@ -31,7 +31,8 @@ interface Props {
 }
 
 export default function ReviewPage({ state, update, today, goLibrary }: Props) {
-  const session = state.session?.day === today ? state.session : undefined;
+  const deck = state.settings.deck;
+  const session = state.session?.day === today && (state.session.deck ?? "all") === deck ? state.session : undefined;
   const active = session && session.index < session.queue.length;
 
   if (!state.order.length) {
@@ -46,16 +47,30 @@ export default function ReviewPage({ state, update, today, goLibrary }: Props) {
     );
   }
 
+  if (!scopeState(state, deck).order.length) {
+    return (
+      <section className="panel center">
+        <h2>{DECK_NAME[deck]}词库还没有词</h2>
+        <p>到「词库」导入生词本时选择「{DECK_NAME[deck]}」，或在词条详情里把词加入{DECK_NAME[deck]}词库。</p>
+        <button className="btn primary" onClick={goLibrary}>
+          去词库
+        </button>
+      </section>
+    );
+  }
+
   if (active) return <SessionPlayer state={state} update={update} today={today} />;
   return <Overview state={state} update={update} today={today} finished={!!session && session.queue.length > 0} />;
 }
 
 function Overview({ state, update, today, finished }: { state: AppState; update: Update; today: string; finished: boolean }) {
-  const due = dueTracks(state, today);
+  const deck = state.settings.deck;
+  const scoped = scopeState(state, deck);
+  const due = dueTracks(scoped, today);
   const count = (k: string) => due.filter((t) => t.kind === k).length;
   const quota = newQuota(state, today);
-  const fresh = Math.min(quota, newCandidates(state).length);
-  const total = buildQueue(state, today).length;
+  const fresh = Math.min(quota, newCandidates(scoped).length);
+  const total = buildQueue(scoped, today, { quota }).length;
   const s = state.settings;
 
   return (
@@ -67,7 +82,10 @@ function Overview({ state, update, today, finished }: { state: AppState; update:
         </div>
       )}
       <div className="panel">
-        <h2>今日复习 · {today}</h2>
+        <h2>
+          今日复习 · {today}
+          {deck !== "all" && <span className="hint"> · {DECK_NAME[deck]}词库</span>}
+        </h2>
         <div className="due-grid">
           <div className="due-cell">
             <b>{count("listening")}</b>
@@ -91,7 +109,12 @@ function Overview({ state, update, today, finished }: { state: AppState; update:
           </div>
         </div>
         <p className="hint">顺序：先听力（避免先看到文字），再新句理解、文字回忆、拼写，最后学新词。初学后第 1、3、7 天复习。</p>
-        <button className="btn primary wide big" disabled={total === 0} onClick={() => update((st) => startSession(st, today))}>
+        <button className="btn primary wide big" disabled={total === 0} onClick={() =>
+            update((st) => ({
+              ...st,
+              session: { day: today, deck, index: 0, queue: buildQueue(scopeState(st, deck), today, { quota: newQuota(st, today) }) },
+            }))
+          }>
           {total === 0 ? "今天没有要复习的了" : `开始今日复习（${total} 张）`}
         </button>
       </div>
@@ -109,7 +132,7 @@ function Overview({ state, update, today, finished }: { state: AppState; update:
           </span>
         </label>
         <label className="setting">
-          <span>每天新学义项</span>
+          <span>每天新学义项（所有词库合计）</span>
           <input
             type="number"
             min={0}

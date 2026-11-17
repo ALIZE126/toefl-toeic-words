@@ -5,6 +5,8 @@ import LibraryPage from "./pages/LibraryPage";
 import StatsPage from "./pages/StatsPage";
 import ReadingPage from "./pages/ReadingPage";
 import { getToday, toDay } from "./lib/util";
+import { DECK_NAME, deckCount } from "./lib/decks";
+import type { DeckFilter } from "./types";
 
 type Tab = "review" | "reading" | "library" | "stats";
 
@@ -34,6 +36,21 @@ export default function App() {
           ))}
         </nav>
       </header>
+      {tab !== "reading" && state.order.length > 0 && (
+        <div className="deck-bar" role="group" aria-label="词库">
+          <span className="hint">词库</span>
+          {(["all", "toefl", "toeic"] as DeckFilter[]).map((d) => (
+            <button
+              key={d}
+              className={state.settings.deck === d ? "seg-btn active" : "seg-btn"}
+              aria-pressed={state.settings.deck === d}
+              onClick={() => update((st) => ({ ...st, settings: { ...st.settings, deck: d } }))}
+            >
+              {DECK_NAME[d]} {deckCount(state, d)}
+            </button>
+          ))}
+        </div>
+      )}
       {!realToday && <div className="banner warn">模拟日期：{today}（URL 中的 ?today= 参数）</div>}
       {saveError && <div className="banner error">{saveError}</div>}
       <main className="main">

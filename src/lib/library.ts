@@ -1,4 +1,5 @@
-import type { AppState, Entry, Example, ImportMode, ImportRecord, Sense } from "../types";
+import type { AppState, DeckId, Entry, Example, ImportMode, ImportRecord, Sense } from "../types";
+import { entryDecks } from "./decks";
 import type { RawRow } from "./docx";
 import { CURATED_BY_WORD, type CuratedEntry } from "../data/curated";
 import { checkSpelling, shortGloss, splitByPos } from "./meaning";
@@ -45,7 +46,7 @@ export function displayWord(e: Entry): string {
   return e.spelling?.status === "confirmed" && e.correctedWord ? e.correctedWord : e.word;
 }
 
-function newEntry(r: RawRow, file: string, now: string): Entry {
+function newEntry(r: RawRow, file: string, now: string, deck: DeckId): Entry {
   const id = entryIdFor(r.word);
   const c = CURATED_BY_WORD[id];
   return {
@@ -59,6 +60,7 @@ function newEntry(r: RawRow, file: string, now: string): Entry {
     questionSource: "",
     note: "",
     curated: !!c,
+    decks: [deck],
     source: { file, row: r.row, firstImportedAt: now, lastImportedAt: now },
     createdAt: now,
     updatedAt: now,
@@ -68,6 +70,8 @@ function newEntry(r: RawRow, file: string, now: string): Entry {
 export interface ImportReport extends ImportRecord {
   /** 重复导入时，原始内容发生变化的词条 */
   changedWords: string[];
+  /** 已有词条中本次新加入这个词库的单词 */
+  deckAddedWords: string[];
   /** 本次新增的单词（按文件顺序） */
   addedWords: string[];
   /** 词库里已有、本次跳过的单词数（只新增模式） */
@@ -86,9 +90,11 @@ export function importRows(
   rows: RawRow[],
   file: string,
   now = new Date().toISOString(),
-  opts: { mode?: ImportMode } = {},
+  opts: { mode?: ImportMode; deck?: DeckId } = {},
 ): { state: AppState; report: ImportReport } {
   const mode: ImportMode = opts.mode ?? "merge";
+  const deck: DeckId = opts.deck ?? "toefl";
+  const deckAddedWords: string[] = [];
   const entries = { ...state.entries };
   // 已确认的拼写更正也算「已有」：比如词库里 permanet 已确认改为 permanent，新词本里的 permanent 不再重复新增
   const alias = new Map<string, string>();
@@ -115,21 +121,26 @@ export function importRows(
     seen.add(id);
     const old = entries[id];
     if (!old) {
-      entries[id] = newEntry(r, file, now);
+      entries[id] = newEntry(r, file, now, deck);
       order.push(id);
       addedWords.push(r.word);
       added++;
       continue;
     }
+    // 已有词条加入本次选择的词库（只改词库归属，进度共享）
+    const decks = entryDecks(old);
+    const base: Entry = decks.includes(deck) && old.decks?.length ? old : { ...old, decks: decks.includes(deck) ? decks : [...decks, deck] };
+    if (!decks.includes(deck)) deckAddedWords.push(r.word);
     if (mode === "addOnly") {
-      // 已有词条完全不动：原始内容、义项、例句、进度都保持原样
+      // 已有词条的原始内容、义项、例句、进度都保持原样
+      entries[id] = base;
       skippedExisting++;
       unchanged++;
       continue;
     }
     const changed = old.phonetic !== r.phonetic || old.meaning !== r.meaning;
     const next: Entry = {
-      ...old,
+      ...base,
       phonetic: r.phonetic,
       meaning: r.meaning,
       source: { ...old.source, file, row: r.row, lastImportedAt: now },
@@ -150,9 +161,10 @@ export function importRows(
     if (!order.includes(id)) order.push(id);
   }
 
-  const record: ImportRecord = { at: now, file, total: rows.length, added, updated, unchanged, mode };
+  const record: ImportRecord = { at: now, file, total: rows.length, added, updated, unchanged, mode, deck, deckAdded: deckAddedWords.length };
   const report: ImportReport = {
     ...record,
+    deckAddedWords,
     addedWords,
     skippedExisting,
     changedWords,

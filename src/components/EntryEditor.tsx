@@ -4,6 +4,7 @@ import type { Update } from "../store";
 import { displayWord, newExampleId, newSenseId, removeSense, senseReady, updateEntry } from "../lib/library";
 import { KIND_LABEL, KIND_ORDER, STATUS_LABEL, trackKey, trackStatus } from "../lib/scheduler";
 import { PhoneticLine, Pill, SpeakButton } from "./common";
+import { DECKS, entryDecks } from "../lib/decks";
 
 interface Props {
   entry: Entry;
@@ -34,6 +35,25 @@ export default function EntryEditor({ entry, state, update, today, onClose }: Pr
           <SpeakButton text={word} settings={state.settings} />
         </div>
         <PhoneticLine entry={entry} />
+        <div className="row deck-edit">
+          <span className="hint">所在词库：</span>
+          {DECKS.map((d) => {
+            const decks = entryDecks(entry);
+            const on = decks.includes(d.id);
+            return (
+              <label key={d.id} className="deck-choice">
+                <input
+                  type="checkbox"
+                  checked={on}
+                  disabled={on && decks.length === 1}
+                  onChange={() => patch({ decks: on ? decks.filter((x) => x !== d.id) : [...decks, d.id] })}
+                />
+                <span>{d.name}</span>
+              </label>
+            );
+          })}
+          <span className="hint">（至少保留一个；同时在两个词库时进度共享）</span>
+        </div>
         <div className="raw">
           <div>
             <span className="hint">词本原文（只读）：</span>
