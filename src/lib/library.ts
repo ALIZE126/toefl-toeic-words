@@ -1,4 +1,4 @@
-import type { AppState, Entry, Example, ImportRecord, Sense } from "../types";
+import type { AppState, Entry, Example, ImportMode, ImportRecord, Sense } from "../types";
 import type { RawRow } from "./docx";
 import { CURATED_BY_WORD, type CuratedEntry } from "../data/curated";
 import { checkSpelling, shortGloss, splitByPos } from "./meaning";
@@ -68,6 +68,10 @@ function newEntry(r: RawRow, file: string, now: string): Entry {
 export interface ImportReport extends ImportRecord {
   /** 重复导入时，原始内容发生变化的词条 */
   changedWords: string[];
+  /** 本次新增的单词（按文件顺序） */
+  addedWords: string[];
+  /** 词库里已有、本次跳过的单词数（只新增模式） */
+  skippedExisting: number;
   /** 文件内重复出现的单词（只导入第一次出现的） */
   duplicatesInFile: string[];
   spellingFlags: number;
@@ -77,8 +81,22 @@ export interface ImportReport extends ImportRecord {
  * 导入词本行。已有词条（按单词匹配）保留其学习义项、例句和复习进度，
  * 只更新原始音标 / 释义并记录变化。
  */
-export function importRows(state: AppState, rows: RawRow[], file: string, now = new Date().toISOString()): { state: AppState; report: ImportReport } {
+export function importRows(
+  state: AppState,
+  rows: RawRow[],
+  file: string,
+  now = new Date().toISOString(),
+  opts: { mode?: ImportMode } = {},
+): { state: AppState; report: ImportReport } {
+  const mode: ImportMode = opts.mode ?? "merge";
   const entries = { ...state.entries };
+  // 已确认的拼写更正也算「已有」：比如词库里 permanet 已确认改为 permanent，新词本里的 permanent 不再重复新增
+  const alias = new Map<string, string>();
+  for (const e of Object.values(state.entries)) {
+    if (e.spelling?.status === "confirmed" && e.correctedWord) alias.set(normalizeWord(e.correctedWord), e.id);
+  }
+  const addedWords: string[] = [];
+  let skippedExisting = 0;
   const order = [...state.order];
   const seen = new Set<string>();
   const duplicatesInFile: string[] = [];
@@ -88,7 +106,8 @@ export function importRows(state: AppState, rows: RawRow[], file: string, now = 
   let unchanged = 0;
 
   for (const r of rows) {
-    const id = entryIdFor(r.word);
+    const raw = entryIdFor(r.word);
+    const id = entries[raw] ? raw : alias.get(raw) ?? raw;
     if (seen.has(id)) {
       duplicatesInFile.push(r.word);
       continue;
@@ -98,7 +117,14 @@ export function importRows(state: AppState, rows: RawRow[], file: string, now = 
     if (!old) {
       entries[id] = newEntry(r, file, now);
       order.push(id);
+      addedWords.push(r.word);
       added++;
+      continue;
+    }
+    if (mode === "addOnly") {
+      // 已有词条完全不动：原始内容、义项、例句、进度都保持原样
+      skippedExisting++;
+      unchanged++;
       continue;
     }
     const changed = old.phonetic !== r.phonetic || old.meaning !== r.meaning;
@@ -124,9 +150,11 @@ export function importRows(state: AppState, rows: RawRow[], file: string, now = 
     if (!order.includes(id)) order.push(id);
   }
 
-  const record: ImportRecord = { at: now, file, total: rows.length, added, updated, unchanged };
+  const record: ImportRecord = { at: now, file, total: rows.length, added, updated, unchanged, mode };
   const report: ImportReport = {
     ...record,
+    addedWords,
+    skippedExisting,
     changedWords,
     duplicatesInFile,
     spellingFlags: Object.values(entries).filter((e) => e.spelling?.status === "pending").length,

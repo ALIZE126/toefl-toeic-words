@@ -164,7 +164,11 @@ export interface ImportRecord {
   added: number;
   updated: number;
   unchanged: number;
+  /** addOnly = 只新增词库里没有的词；merge = 同时更新已有词的原始音标 / 释义 */
+  mode?: ImportMode;
 }
+
+export type ImportMode = "addOnly" | "merge";
 
 export interface AppState {
   version: 1;
