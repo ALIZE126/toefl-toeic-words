@@ -219,3 +219,28 @@ ul.plain { list-style: none; padding: 0; margin: 0; display: flex; flex-directio
   .grid2 { flex-direction: column; }
   .field.narrow { flex: 1; }
 }
+
+/* 托福阅读 · 补全单词 */
+.passage-item { text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 4px; font: inherit; color: inherit; }
+.passage-item:hover { border-color: var(--primary); }
+.passage { font-size: 18px; line-height: 2.3; margin: 12px 0; }
+.blank-wrap { white-space: nowrap; position: relative; }
+.blank { white-space: nowrap; display: inline-flex; align-items: baseline; }
+.blank-prefix { font-weight: 600; }
+.blank-input {
+  font: inherit; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 16px;
+  border: 0; border-bottom: 2px solid var(--primary); background: var(--primary-soft); border-radius: 4px 4px 0 0;
+  padding: 0 3px; margin: 0 1px; line-height: 1.6; color: inherit; min-width: 3ch;
+}
+.blank-input:focus { outline: 2px solid var(--primary); outline-offset: 1px; }
+.blank-input:disabled { opacity: 1; }
+.blank.right .blank-input { background: var(--good-soft); border-color: var(--good); color: var(--good); }
+.blank.wrong .blank-input { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); text-decoration: line-through; }
+.fix { color: var(--good); font-weight: 700; font-size: 13px; margin-left: 2px; }
+.blank-no { color: var(--muted); font-size: 11px; margin-left: 1px; }
+.feedback { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
+.fb-row { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; }
+.fb-row code { background: var(--bg); padding: 1px 6px; border-radius: 4px; }
+.fb-clue { margin-top: 6px; padding: 8px 10px; background: var(--primary-soft); border-radius: 8px; display: flex; flex-direction: column; gap: 4px; }
+.due-grid { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+@media (max-width: 640px) { .passage { font-size: 17px; line-height: 2.4; } }

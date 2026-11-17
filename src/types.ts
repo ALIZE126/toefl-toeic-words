@@ -1,5 +1,5 @@
-/** 练习轨道：同一义项的三种练习各自独立排期 */
-export type TrackKind = "listening" | "context" | "text";
+/** 练习轨道：同一义项的各种练习各自独立排期（spelling = 拼写，来自托福阅读补全单词） */
+export type TrackKind = "listening" | "context" | "text" | "spelling";
 
 /** 自编例句 / 原题例句 */
 export type ExampleKind = "self" | "original";
@@ -91,6 +91,8 @@ export interface TrackState {
   lastResult?: AnyResult;
   reviews: number;
   lapses: number;
+  /** 上次考这个轨道用的句子 / 例句 ID（拼写复习下次优先换一句） */
+  lastItem?: string;
 }
 
 export interface ReviewLog {
@@ -109,6 +111,22 @@ export interface ReviewLog {
   exampleId?: string;
   /** 语音不可用，改做了文字版 */
   audioFallback?: boolean;
+  /** 来自哪篇补全单词短文 */
+  passageId?: string;
+}
+
+/** 托福阅读 · 补全单词：一次整篇作答 */
+export interface PassageAttempt {
+  id: string;
+  passageId: string;
+  at: string;
+  day: string;
+  /** 10 空中答对几空（目标词和普通词都算） */
+  score: number;
+  total: number;
+  targetCorrect: number;
+  targetTotal: number;
+  answers: { input: string; correct: boolean }[];
 }
 
 export type CardType = "learn" | TrackKind;
@@ -157,5 +175,6 @@ export interface AppState {
   logs: ReviewLog[];
   settings: Settings;
   imports: ImportRecord[];
+  passageAttempts: PassageAttempt[];
   session?: Session;
 }

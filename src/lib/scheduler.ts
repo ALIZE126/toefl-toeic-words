@@ -12,6 +12,7 @@ import type {
 } from "../types";
 import { learnExample, senseReady, testExamples } from "./library";
 import { addDays, uid } from "./util";
+import { pickSpellingItem } from "./spelling";
 
 /** 初学后的第 1、3、7 天复习 */
 export const REVIEW_DAYS = [1, 3, 7] as const;
@@ -20,12 +21,13 @@ export const MASTERED_STAGE = REVIEW_DAYS.length;
 export const RETRY_GAP = 3;
 export const MAX_RETRY = 3;
 
-export const KIND_ORDER: TrackKind[] = ["listening", "context", "text"];
+export const KIND_ORDER: TrackKind[] = ["listening", "context", "text", "spelling"];
 
 export const KIND_LABEL: Record<TrackKind, string> = {
   listening: "无字幕听力",
   context: "新句理解",
   text: "文字回忆",
+  spelling: "拼写",
 };
 
 export const RESULT_LABEL: Record<AnyResult, string> = {
@@ -158,7 +160,7 @@ export function recordAnswer(state: AppState, input: GradeInput): AppState {
   const key = trackKey(card.senseId, kind);
   const practice = !!card.intro || !!card.retry || !!input.audioFallback;
   const tracks = { ...state.tracks };
-  if (!practice && tracks[key]) tracks[key] = applyGrade(tracks[key], toGrade(result), day, result);
+  if (!practice && tracks[key]) tracks[key] = { ...applyGrade(tracks[key], toGrade(result), day, result), lastItem: card.exampleId ?? tracks[key].lastItem };
   const log: ReviewLog = {
     id: uid("l"),
     at: new Date().toISOString(),
@@ -227,8 +229,9 @@ export function buildQueue(state: AppState, day: string, opts: { includeNew?: bo
   const cards: Card[] = [];
   for (const t of dueTracks(state, day)) {
     const found = findSense(state, t.entryId, t.senseId)!;
-    const exampleId = t.kind === "text" ? undefined : pickTestExample(found.sense, t.kind, t.reviews);
-    if (t.kind !== "text" && !exampleId) continue; // 复测句被删掉了
+    const exampleId =
+      t.kind === "text" ? undefined : t.kind === "spelling" ? pickSpellingItem(state, t)?.id : pickTestExample(found.sense, t.kind, t.reviews);
+    if (t.kind !== "text" && !exampleId) continue; // 复测句 / 拼写句被删掉了
     cards.push({ id: uid("c"), type: t.kind, entryId: t.entryId, senseId: t.senseId, exampleId });
   }
   if (opts.includeNew !== false) {
@@ -268,6 +271,7 @@ export function computeStats(state: AppState, today: string) {
   const listening = by("listening");
   const context = by("context");
   const text = by("text");
+  const spelling = by("spelling");
   const count = (arr: ReviewLog[], r: AnyResult) => arr.filter((l) => l.result === r).length;
 
   const trackCounts = Object.fromEntries(
@@ -300,6 +304,13 @@ export function computeStats(state: AppState, today: string) {
     },
     context: { total: context.length, correct: count(context, "correct"), rate: rate(count(context, "correct"), context.length) },
     text: { total: text.length, correct: count(text, "good"), rate: rate(count(text, "good"), text.length) },
+    spelling: { total: spelling.length, correct: count(spelling, "correct"), rate: rate(count(spelling, "correct"), spelling.length) },
+    passages: (() => {
+      const a = state.passageAttempts ?? [];
+      const score = a.reduce((n, x) => n + x.score, 0);
+      const total = a.reduce((n, x) => n + x.total, 0);
+      return { attempts: a.length, score, total, rate: rate(score, total) };
+    })(),
     learnedSenses: new Set(Object.values(state.tracks).map((t) => t.senseId)).size,
     trackCounts,
     days,

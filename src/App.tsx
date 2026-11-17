@@ -3,12 +3,14 @@ import { useStore } from "./store";
 import ReviewPage from "./pages/ReviewPage";
 import LibraryPage from "./pages/LibraryPage";
 import StatsPage from "./pages/StatsPage";
+import ReadingPage from "./pages/ReadingPage";
 import { getToday, toDay } from "./lib/util";
 
-type Tab = "review" | "library" | "stats";
+type Tab = "review" | "reading" | "library" | "stats";
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: "review", label: "今日复习", icon: "📅" },
+  { id: "reading", label: "托福阅读", icon: "📖" },
   { id: "library", label: "词库", icon: "📚" },
   { id: "stats", label: "学习记录", icon: "📈" },
 ];
@@ -36,6 +38,7 @@ export default function App() {
       {saveError && <div className="banner error">{saveError}</div>}
       <main className="main">
         {tab === "review" && <ReviewPage state={state} update={update} today={today} goLibrary={() => setTab("library")} />}
+        {tab === "reading" && <ReadingPage state={state} update={update} today={today} />}
         {tab === "library" && <LibraryPage state={state} update={update} today={today} />}
         {tab === "stats" && <StatsPage state={state} update={update} today={today} />}
       </main>

@@ -19,6 +19,8 @@ import ListeningCard from "../components/ListeningCard";
 import ContextCard from "../components/ContextCard";
 import TextCard from "../components/TextCard";
 import LearnCard from "../components/LearnCard";
+import SpellingCard from "../components/SpellingCard";
+import { spellingItems } from "../lib/spelling";
 import { englishVoices, loadVoices, speechSupported } from "../lib/speech";
 
 interface Props {
@@ -80,11 +82,15 @@ function Overview({ state, update, today, finished }: { state: AppState; update:
             <span>📝 文字回忆</span>
           </div>
           <div className="due-cell">
+            <b>{count("spelling")}</b>
+            <span>✍️ 拼写复习</span>
+          </div>
+          <div className="due-cell">
             <b>{fresh}</b>
             <span>🌱 新学义项</span>
           </div>
         </div>
-        <p className="hint">顺序：先听力（避免先看到文字），再新句理解、文字回忆，最后学新词。初学后第 1、3、7 天复习。</p>
+        <p className="hint">顺序：先听力（避免先看到文字），再新句理解、文字回忆、拼写，最后学新词。初学后第 1、3、7 天复习。</p>
         <button className="btn primary wide big" disabled={total === 0} onClick={() => update((st) => startSession(st, today))}>
           {total === 0 ? "今天没有要复习的了" : `开始今日复习（${total} 张）`}
         </button>
@@ -167,8 +173,13 @@ function SessionPlayer({ state, update, today }: { state: AppState; update: Upda
   const found = findSense(state, card.entryId, card.senseId);
   const example = found?.sense.examples.find((x) => x.id === card.exampleId);
 
+  const spItem = useMemo(
+    () => (card.type === "spelling" ? spellingItems(state, card.entryId, card.senseId).find((i) => i.id === card.exampleId) : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [card.id],
+  );
   // 词条或例句已被删除：跳过
-  const broken = !found || ((card.type === "listening" || card.type === "context") && !example);
+  const broken = !found || ((card.type === "listening" || card.type === "context") && !example) || (card.type === "spelling" && !spItem);
   useEffect(() => {
     if (broken) update((st) => (st.session ? { ...st, session: { ...st.session, index: st.session.index + 1 } } : st));
   }, [broken, update]);
@@ -242,6 +253,9 @@ function SessionPlayer({ state, update, today }: { state: AppState; update: Upda
           commute={commute}
           onDone={(d) => answer(d.result, { plays: d.plays, audioFallback: d.audioFallback })}
         />
+      )}
+      {card.type === "spelling" && spItem && (
+        <SpellingCard key={card.id} entry={entry} sense={sense} item={spItem} onDone={(r) => answer(r)} />
       )}
       {card.type === "context" && ctx && example && (
         <ContextCard

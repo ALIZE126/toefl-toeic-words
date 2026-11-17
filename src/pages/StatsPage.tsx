@@ -58,6 +58,20 @@ export default function StatsPage({ state, update, today }: { state: AppState; u
             </small>
           </div>
           <div className="stat">
+            <b>{pct(s.spelling.rate)}</b>
+            <span>生词本拼写正确率</span>
+            <small>
+              拼对 {s.spelling.correct} / 共 {s.spelling.total}（短文目标词 + 拼写复习）
+            </small>
+          </div>
+          <div className="stat">
+            <b>{pct(s.passages.rate)}</b>
+            <span>补全单词短文得分率</span>
+            <small>
+              {s.passages.score} / {s.passages.total} 空 · 共做 {s.passages.attempts} 篇次
+            </small>
+          </div>
+          <div className="stat">
             <b>{s.learnedSenses}</b>
             <span>已学义项</span>
             <small>词库共 {state.order.length} 个词条</small>
@@ -88,7 +102,7 @@ export default function StatsPage({ state, update, today }: { state: AppState; u
             ))}
           </tbody>
         </table>
-        <p className="hint">同一义项的文字和听力分开排期，例如文字已掌握、听力仍待复习。</p>
+        <p className="hint">同一义项的文字、听力和拼写分开排期，例如文字已掌握、拼写仍待复习。</p>
       </div>
 
       <div className="panel">

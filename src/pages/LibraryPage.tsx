@@ -145,7 +145,7 @@ export default function LibraryPage({ state, update, today }: { state: AppState;
 
 function SenseSummary({ state, entryId, today }: { state: AppState; entryId: string; today: string }) {
   const e = state.entries[entryId];
-  const st = (k: "text" | "listening") => {
+  const st = (k: "text" | "listening" | "spelling") => {
     const all = e.senses.map((s) => trackStatus(state.tracks[trackKey(s.id, k)], today)).filter((x) => x !== "none");
     if (!all.length) return null;
     if (all.includes("due")) return "due";
@@ -154,11 +154,13 @@ function SenseSummary({ state, entryId, today }: { state: AppState; entryId: str
   };
   const t = st("text");
   const l = st("listening");
+  const sp = st("spelling");
   const tone = (x: string | null) => (x === "mastered" ? "good" : x === "due" ? "warn" : "plain");
   return (
     <>
       {t && <Pill tone={tone(t)}>文字{STATUS_LABEL[t as "due"]}</Pill>}
       {l && <Pill tone={tone(l)}>听力{STATUS_LABEL[l as "due"]}</Pill>}
+      {sp && <Pill tone={tone(sp)}>拼写{STATUS_LABEL[sp as "due"]}</Pill>}
     </>
   );
 }

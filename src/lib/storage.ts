@@ -11,6 +11,7 @@ export function emptyState(): AppState {
     logs: [],
     settings: { newPerDay: 10, commuteMode: false, rate: 0.95 },
     imports: [],
+    passageAttempts: [],
   };
 }
 
