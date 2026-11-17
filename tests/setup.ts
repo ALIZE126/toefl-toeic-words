@@ -24,3 +24,11 @@ class MemoryStorage implements Storage {
 if (typeof globalThis.localStorage?.clear !== "function") {
   Object.defineProperty(globalThis, "localStorage", { value: new MemoryStorage(), configurable: true, writable: true });
 }
+
+// jsdom 没有 IndexedDB 和 URL.createObjectURL：图片库测试用内存版 IndexedDB
+import "fake-indexeddb/auto";
+if (typeof URL.createObjectURL !== "function") {
+  let n = 0;
+  Object.defineProperty(URL, "createObjectURL", { value: () => `blob:test/${++n}`, configurable: true });
+  Object.defineProperty(URL, "revokeObjectURL", { value: () => {}, configurable: true });
+}

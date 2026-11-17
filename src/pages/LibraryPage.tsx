@@ -7,8 +7,10 @@ import { displayWord, importRows, senseReady, type ImportReport } from "../lib/l
 import { STATUS_LABEL, trackKey, trackStatus } from "../lib/scheduler";
 import { Pill } from "../components/common";
 import EntryEditor from "../components/EntryEditor";
+import Part1ImportPanel from "../components/Part1ImportPanel";
+import { hasPart1, part1Categories } from "../lib/part1";
 
-type Filter = "all" | "recent" | "curated" | "learning" | "spelling" | "noexample";
+type Filter = "all" | "recent" | "curated" | "learning" | "spelling" | "noexample" | "part1" | "p1:人物动作" | "p1:物体状态" | "p1:位置关系";
 
 const FILTERS: { id: Filter; label: string }[] = [
   { id: "all", label: "全部" },
@@ -62,6 +64,12 @@ export default function LibraryPage({ state, update, today }: { state: AppState;
       .filter((e) => {
         if (kw && !(e.word.toLowerCase().includes(kw) || e.meaning.includes(kw) || e.senses.some((s) => s.gloss.includes(kw)))) return false;
         switch (filter) {
+          case "part1":
+            return hasPart1(e);
+          case "p1:人物动作":
+          case "p1:物体状态":
+          case "p1:位置关系":
+            return part1Categories(e).includes(filter.slice(3));
           case "recent":
             return !!lastAdd && e.createdAt === lastAdd.at;
           case "curated":
@@ -84,6 +92,7 @@ export default function LibraryPage({ state, update, today }: { state: AppState;
   const curated = scoped.order.filter((id) => scoped.entries[id]?.curated).length;
   const spelling = scoped.order.filter((id) => scoped.entries[id]?.spelling?.status === "pending").length;
   const hasAny = state.order.length > 0;
+  const p1Count = scoped.order.filter((id) => hasPart1(scoped.entries[id])).length;
 
   return (
     <section className="stack">
@@ -174,12 +183,32 @@ export default function LibraryPage({ state, update, today }: { state: AppState;
         )}
       </div>
 
+      {viewDeck === "toeic" && <Part1ImportPanel state={state} update={update} />}
+      {viewDeck === "all" && hasAny && (
+        <div className="panel">
+          <span className="hint">要导入托业 Part 1 图片词库，请先在顶部切到「托业」。</span>{" "}
+          <button className="link" onClick={() => update((st) => ({ ...st, settings: { ...st.settings, deck: "toeic" } }))}>
+            切到托业
+          </button>
+        </div>
+      )}
+
       {total > 0 && (
         <div className="panel">
           <div className="filters">
             <input className="search" placeholder="搜索单词或释义" value={q} onChange={(e) => setQ(e.target.value)} />
             <div className="seg">
-              {[...FILTERS.slice(0, 1), ...(lastAdd ? [{ id: "recent" as Filter, label: `上次新增 (${lastAdd.added})` }] : []), ...FILTERS.slice(1)].map((f) => (
+              {[
+                ...FILTERS.slice(0, 1),
+                ...(lastAdd ? [{ id: "recent" as Filter, label: `上次新增 (${lastAdd.added})` }] : []),
+                ...FILTERS.slice(1),
+                ...(p1Count
+                  ? (["part1", "p1:人物动作", "p1:物体状态", "p1:位置关系"] as Filter[]).map((id) => ({
+                      id,
+                      label: id === "part1" ? `Part 1 (${p1Count})` : `${id.slice(3)} (${scoped.order.filter((x) => part1Categories(scoped.entries[x]).includes(id.slice(3))).length})`,
+                    }))
+                  : []),
+              ].map((f) => (
                 <button key={f.id} className={filter === f.id ? "seg-btn active" : "seg-btn"} onClick={() => setFilter(f.id)}>
                   {f.label}
                 </button>
@@ -199,6 +228,7 @@ export default function LibraryPage({ state, update, today }: { state: AppState;
                   <span className="wr-tags">
                     {viewDeck === "all" && entryDecks(e).map((d) => <Pill key={d}>{DECK_NAME[d]}</Pill>)}
                     {e.curated && <Pill tone="info">已配练习</Pill>}
+                    {hasPart1(e) && <Pill tone="info">Part 1</Pill>}
                     {e.spelling?.status === "pending" && <Pill tone="warn">疑似拼写</Pill>}
                     {e.senses.length > 1 && <Pill>{e.senses.length} 个义项</Pill>}
                     {learnedEntries.has(e.id) && <SenseSummary state={state} entryId={e.id} today={today} />}

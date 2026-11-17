@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import Part1Card from "../components/Part1Card";
+import Part1Hub, { part1Counts } from "../components/Part1Hub";
+import { part1Questions } from "../lib/part1";
 import type { AppState, Card } from "../types";
 import type { Update } from "../store";
 import {
@@ -31,6 +34,7 @@ interface Props {
 }
 
 export default function ReviewPage({ state, update, today, goLibrary }: Props) {
+  const [view, setView] = useState<"overview" | "part1">("overview");
   const deck = state.settings.deck;
   const session = state.session?.day === today && (state.session.deck ?? "all") === deck ? state.session : undefined;
   const active = session && session.index < session.queue.length;
@@ -60,17 +64,55 @@ export default function ReviewPage({ state, update, today, goLibrary }: Props) {
   }
 
   if (active) return <SessionPlayer state={state} update={update} today={today} />;
-  return <Overview state={state} update={update} today={today} finished={!!session && session.queue.length > 0} />;
+  const finished = !!session && session.queue.length > 0;
+  if (view === "part1" && deck !== "toefl")
+    return (
+      <Part1Hub
+        state={state}
+        update={update}
+        today={today}
+        deck={deck}
+        onBack={() => setView("overview")}
+        finished={finished && session?.scope === "part1"}
+      />
+    );
+  return (
+    <Overview
+      state={state}
+      update={update}
+      today={today}
+      finished={finished && session?.scope !== "part1"}
+      openPart1={() => setView("part1")}
+      goLibrary={goLibrary}
+    />
+  );
 }
 
-function Overview({ state, update, today, finished }: { state: AppState; update: Update; today: string; finished: boolean }) {
+function Overview({
+  state,
+  update,
+  today,
+  finished,
+  openPart1,
+  goLibrary,
+}: {
+  state: AppState;
+  update: Update;
+  today: string;
+  finished: boolean;
+  openPart1: () => void;
+  goLibrary: () => void;
+}) {
   const deck = state.settings.deck;
   const scoped = scopeState(state, deck);
   const due = dueTracks(scoped, today);
   const count = (k: string) => due.filter((t) => t.kind === k).length;
   const quota = newQuota(state, today);
   const fresh = Math.min(quota, newCandidates(scoped).length);
-  const total = buildQueue(scoped, today, { quota }).length;
+  // 托福视图不出托业 Part 1 听音选图
+  const exclude = deck === "toefl" ? (["part1"] as const).slice() : undefined;
+  const total = buildQueue(scoped, today, { quota, exclude }).length;
+  const p1 = deck === "toefl" ? null : part1Counts(scoped, today);
   const s = state.settings;
 
   return (
@@ -103,6 +145,12 @@ function Overview({ state, update, today, finished }: { state: AppState; update:
             <b>{count("spelling")}</b>
             <span>✍️ 拼写复习</span>
           </div>
+          {p1 && p1.questions > 0 && (
+            <div className="due-cell">
+              <b>{count("part1")}</b>
+              <span>🖼 Part 1 选图</span>
+            </div>
+          )}
           <div className="due-cell">
             <b>{fresh}</b>
             <span>🌱 新学义项</span>
@@ -112,12 +160,41 @@ function Overview({ state, update, today, finished }: { state: AppState; update:
         <button className="btn primary wide big" disabled={total === 0} onClick={() =>
             update((st) => ({
               ...st,
-              session: { day: today, deck, index: 0, queue: buildQueue(scopeState(st, deck), today, { quota: newQuota(st, today) }) },
+              session: {
+                day: today,
+                deck,
+                scope: "daily",
+                index: 0,
+                queue: buildQueue(scopeState(st, deck), today, { quota: newQuota(st, today), exclude }),
+              },
             }))
           }>
           {total === 0 ? "今天没有要复习的了" : `开始今日复习（${total} 张）`}
         </button>
       </div>
+
+      {p1 && (
+        <div className="panel p1-entry" data-testid="part1-entry">
+          <h3>🖼 托业 Part 1 专项</h3>
+          {p1.phrases > 0 ? (
+            <>
+              <p className="hint">
+                看图学短语 {p1.phrases} 张配图 · 听音选图可判分 {p1.questions} 题（待复习 {p1.due}，新题 {p1.fresh}）
+              </p>
+              <button className="btn primary" onClick={openPart1}>
+                进入 Part 1 专项
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="hint">还没有导入 Part 1 图片词库。到「词库」切到「托业」，点「导入 Part 1 图片词库」。</p>
+              <button className="btn" onClick={goLibrary}>
+                去词库导入
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="panel">
         <h3>设置</h3>
@@ -201,8 +278,13 @@ function SessionPlayer({ state, update, today }: { state: AppState; update: Upda
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [card.id],
   );
+  const p1q = useMemo(
+    () => (card.type === "part1" ? part1Questions(state).find((q) => q.key === card.exampleId && q.senseId === card.senseId) : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [card.id],
+  );
   // 词条或例句已被删除：跳过
-  const broken = !found || ((card.type === "listening" || card.type === "context") && !example) || (card.type === "spelling" && !spItem);
+  const broken = !found || ((card.type === "listening" || card.type === "context") && !example) || (card.type === "spelling" && !spItem) || (card.type === "part1" && !p1q);
   useEffect(() => {
     if (broken) update((st) => (st.session ? { ...st, session: { ...st.session, index: st.session.index + 1 } } : st));
   }, [broken, update]);
@@ -223,7 +305,10 @@ function SessionPlayer({ state, update, today }: { state: AppState; update: Upda
   const commute = state.settings.commuteMode;
   const remaining = session.queue.length - session.index;
 
-  const answer = (result: Parameters<typeof recordAnswer>[1]["result"], extra: { plays?: number; audioFallback?: boolean } = {}) =>
+  const answer = (
+    result: Parameters<typeof recordAnswer>[1]["result"],
+    extra: { plays?: number; audioFallback?: boolean; chosen?: string } = {},
+  ) =>
     update((st) => {
       const s1 = recordAnswer(st, { card, result, day: today, ...extra });
       const failed = !extra.audioFallback && toGrade(result) === "fail";
@@ -238,6 +323,7 @@ function SessionPlayer({ state, update, today }: { state: AppState; update: Upda
         <span>
           第 {session.index + 1} / {session.queue.length} 张 · {label}
           {card.retry ? " · 重做" : ""}
+          {card.free ? " · 自由练习" : ""}
         </span>
         <span className="hint">剩 {remaining}</span>
         <button
@@ -275,6 +361,14 @@ function SessionPlayer({ state, update, today }: { state: AppState; update: Upda
           settings={state.settings}
           commute={commute}
           onDone={(d) => answer(d.result, { plays: d.plays, audioFallback: d.audioFallback })}
+        />
+      )}
+      {card.type === "part1" && p1q && (
+        <Part1Card
+          key={card.id}
+          question={p1q}
+          settings={state.settings}
+          onDone={(d) => answer(d.result, { plays: d.plays, audioFallback: d.audioFallback, chosen: d.chosen })}
         />
       )}
       {card.type === "spelling" && spItem && (

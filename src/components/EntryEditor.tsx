@@ -5,6 +5,7 @@ import { displayWord, newExampleId, newSenseId, removeSense, senseReady, updateE
 import { KIND_LABEL, KIND_ORDER, STATUS_LABEL, trackKey, trackStatus } from "../lib/scheduler";
 import { PhoneticLine, Pill, SpeakButton } from "./common";
 import { DECKS, entryDecks } from "../lib/decks";
+import { Part1Details } from "./Part1Hub";
 
 interface Props {
   entry: Entry;
@@ -199,6 +200,12 @@ function SenseEditor({
           <input value={sense.gloss} onChange={(e) => onPatch({ gloss: e.target.value })} />
         </label>
       </div>
+      {sense.part1 && (
+        <details className="p1-sense" open>
+          <summary>托业 Part 1 图片与出处</summary>
+          <Part1Details entry={entry} sense={sense} state={state} />
+        </details>
+      )}
       <label className="field">
         <span>语境提示（多义词在文字回忆时显示，如 company property）</span>
         <input value={sense.cue ?? ""} onChange={(e) => onPatch({ cue: e.target.value || undefined })} />

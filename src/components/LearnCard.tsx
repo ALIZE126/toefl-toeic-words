@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Entry, Example, Sense, Settings } from "../types";
 import { displayWord } from "../lib/library";
 import { Highlight, PhoneticLine, Pill, SpeakButton } from "./common";
+import PackImage from "./PackImage";
 
 interface Props {
   entry: Entry;
@@ -30,6 +31,7 @@ export default function LearnCard({ entry, sense, example, settings, onDone }: P
           多义词：本次学习义项 {entry.senses.findIndex((s) => s.id === sense.id) + 1}/{entry.senses.length}
         </div>
       )}
+      {sense.part1?.image && <PackImage image={sense.part1.image} alt={`${word} 配图`} className="learn-img" />}
       {example && (
         <>
           <p className="sentence big">

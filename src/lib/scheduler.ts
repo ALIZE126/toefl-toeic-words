@@ -13,6 +13,7 @@ import type {
 import { learnExample, senseReady, testExamples } from "./library";
 import { addDays, uid } from "./util";
 import { pickSpellingItem } from "./spelling";
+import { part1Questions, pickPart1Question } from "./part1";
 
 /** 初学后的第 1、3、7 天复习 */
 export const REVIEW_DAYS = [1, 3, 7] as const;
@@ -21,13 +22,14 @@ export const MASTERED_STAGE = REVIEW_DAYS.length;
 export const RETRY_GAP = 3;
 export const MAX_RETRY = 3;
 
-export const KIND_ORDER: TrackKind[] = ["listening", "context", "text", "spelling"];
+export const KIND_ORDER: TrackKind[] = ["listening", "part1", "context", "text", "spelling"];
 
 export const KIND_LABEL: Record<TrackKind, string> = {
   listening: "无字幕听力",
   context: "新句理解",
   text: "文字回忆",
   spelling: "拼写",
+  part1: "Part 1 听音选图",
 };
 
 export const RESULT_LABEL: Record<AnyResult, string> = {
@@ -41,6 +43,12 @@ export const RESULT_LABEL: Record<AnyResult, string> = {
   wrong: "答错",
   learned: "初学",
 };
+
+/** 同一个结果在不同练习里的叫法 */
+export function resultLabel(kind: TrackKind | "learn", result: AnyResult): string {
+  if (kind === "part1") return result === "first" ? "首听答对" : result === "replay" ? "重听后答对" : "答错";
+  return RESULT_LABEL[result];
+}
 
 export function trackKey(senseId: string, kind: TrackKind): string {
   return `${senseId}|${kind}`;
@@ -146,6 +154,8 @@ export interface GradeInput {
   day: string;
   plays?: number;
   audioFallback?: boolean;
+  /** Part 1 答错时选中的图片对应的 phrase_id */
+  chosen?: string;
 }
 
 /**
@@ -158,9 +168,24 @@ export function recordAnswer(state: AppState, input: GradeInput): AppState {
   if (card.type === "learn") return state;
   const kind = card.type;
   const key = trackKey(card.senseId, kind);
-  const practice = !!card.intro || !!card.retry || !!input.audioFallback;
+  const practice = !!card.intro || !!card.retry || !!card.free || !!input.audioFallback;
   const tracks = { ...state.tracks };
-  if (!practice && tracks[key]) tracks[key] = { ...applyGrade(tracks[key], toGrade(result), day, result), lastItem: card.exampleId ?? tracks[key].lastItem };
+  if (!practice && !tracks[key] && kind === "part1") {
+    // 第一次做这道听音选图：相当于初学，建立轨道，第 1 天复习；结果计入首听正确率
+    tracks[key] = {
+      senseId: card.senseId,
+      entryId: card.entryId,
+      kind,
+      stage: 0,
+      due: addDays(day, REVIEW_DAYS[0]),
+      introducedOn: day,
+      lastReviewedOn: day,
+      lastResult: result,
+      reviews: 1,
+      lapses: toGrade(result) === "fail" ? 1 : 0,
+      lastItem: card.exampleId,
+    };
+  } else if (!practice && tracks[key]) tracks[key] = { ...applyGrade(tracks[key], toGrade(result), day, result), lastItem: card.exampleId ?? tracks[key].lastItem };
   const log: ReviewLog = {
     id: uid("l"),
     at: new Date().toISOString(),
@@ -174,6 +199,9 @@ export function recordAnswer(state: AppState, input: GradeInput): AppState {
     plays: input.plays,
     exampleId: card.exampleId,
     audioFallback: input.audioFallback || undefined,
+    chosen: input.chosen,
+    retry: card.retry ? true : undefined,
+    free: card.free || undefined,
   };
   return { ...state, tracks, logs: [...state.logs, log] };
 }
@@ -225,12 +253,19 @@ export function newQuota(state: AppState, day: string): number {
  * 今日队列：先听力（避免先看到文字）、再新句理解、再文字回忆，最后是新学。
  * 新学：学习句卡 → 隔几张后主动回忆。
  */
-export function buildQueue(state: AppState, day: string, opts: { includeNew?: boolean; quota?: number } = {}): Card[] {
+export function buildQueue(state: AppState, day: string, opts: { includeNew?: boolean; quota?: number; exclude?: TrackKind[] } = {}): Card[] {
   const cards: Card[] = [];
   for (const t of dueTracks(state, day)) {
+    if (opts.exclude?.includes(t.kind)) continue;
     const found = findSense(state, t.entryId, t.senseId)!;
     const exampleId =
-      t.kind === "text" ? undefined : t.kind === "spelling" ? pickSpellingItem(state, t)?.id : pickTestExample(found.sense, t.kind, t.reviews);
+      t.kind === "text"
+        ? undefined
+        : t.kind === "spelling"
+          ? pickSpellingItem(state, t)?.id
+          : t.kind === "part1"
+            ? pickPart1Question(state, t)?.key
+            : pickTestExample(found.sense, t.kind, t.reviews);
     if (t.kind !== "text" && !exampleId) continue; // 复测句 / 拼写句被删掉了
     cards.push({ id: uid("c"), type: t.kind, entryId: t.entryId, senseId: t.senseId, exampleId });
   }
@@ -244,6 +279,29 @@ export function buildQueue(state: AppState, day: string, opts: { includeNew?: bo
       if (i >= 2) cards.push(recalls.shift()!);
     });
     cards.push(...recalls);
+  }
+  return cards;
+}
+
+/**
+ * 托业 Part 1 听音选图专项：先到期的复习题，再没做过的新题。
+ * free = 自由练习，所有可判分的题都出，不计入排期和正确率。
+ */
+export function buildPart1Queue(state: AppState, day: string, opts: { free?: boolean } = {}): Card[] {
+  const qs = part1Questions(state);
+  if (opts.free) return qs.map((q) => ({ id: uid("c"), type: "part1", entryId: q.entryId, senseId: q.senseId, exampleId: q.key, free: true }));
+  const cards: Card[] = [];
+  for (const t of dueTracks(state, day)) {
+    if (t.kind !== "part1") continue;
+    const q = pickPart1Question(state, t);
+    if (q) cards.push({ id: uid("c"), type: "part1", entryId: t.entryId, senseId: t.senseId, exampleId: q.key });
+  }
+  const started = new Set(Object.values(state.tracks).filter((t) => t.kind === "part1").map((t) => t.senseId));
+  const taken = new Set<string>();
+  for (const q of qs) {
+    if (started.has(q.senseId) || taken.has(q.senseId)) continue;
+    taken.add(q.senseId);
+    cards.push({ id: uid("c"), type: "part1", entryId: q.entryId, senseId: q.senseId, exampleId: q.key });
   }
   return cards;
 }
@@ -272,6 +330,8 @@ export function computeStats(state: AppState, today: string) {
   const context = by("context");
   const text = by("text");
   const spelling = by("spelling");
+  const part1 = by("part1");
+  const part1Retries = state.logs.filter((l) => l.kind === "part1" && l.practice && l.retry);
   const count = (arr: ReviewLog[], r: AnyResult) => arr.filter((l) => l.result === r).length;
 
   const trackCounts = Object.fromEntries(
@@ -304,6 +364,15 @@ export function computeStats(state: AppState, today: string) {
     },
     context: { total: context.length, correct: count(context, "correct"), rate: rate(count(context, "correct"), context.length) },
     text: { total: text.length, correct: count(text, "good"), rate: rate(count(text, "good"), text.length) },
+    part1: {
+      total: part1.length,
+      first: count(part1, "first"),
+      replay: count(part1, "replay"),
+      wrong: count(part1, "wrong"),
+      firstRate: rate(count(part1, "first"), part1.length),
+      retries: part1Retries.length,
+      retryCorrect: part1Retries.filter((l) => l.correct).length,
+    },
     spelling: { total: spelling.length, correct: count(spelling, "correct"), rate: rate(count(spelling, "correct"), spelling.length) },
     passages: (() => {
       const a = state.passageAttempts ?? [];

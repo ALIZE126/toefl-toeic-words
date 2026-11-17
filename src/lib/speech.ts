@@ -44,6 +44,15 @@ function pickVoice(voiceURI?: string): SpeechSynthesisVoice | undefined {
  * 朗读一句英文。播放成功开始返回 ok；不支持 / 没有英文语音 / 出错 / 超时没有开始播放时返回原因。
  */
 export async function speak(text: string, opts: { rate?: number; voiceURI?: string } = {}): Promise<SpeakOutcome> {
+  try {
+    return await speakInner(text, opts);
+  } catch (e) {
+    // 浏览器的语音接口抛异常时也要给出提示，不能让播放按钮一直停在「播放中」
+    return { ok: false, reason: `语音播放出错（${e instanceof Error ? e.message : String(e)}）。` };
+  }
+}
+
+async function speakInner(text: string, opts: { rate?: number; voiceURI?: string }): Promise<SpeakOutcome> {
   if (!speechSupported()) return { ok: false, reason: "当前浏览器不支持语音合成（Web Speech API）。" };
   const voices = await loadVoices();
   const synth = window.speechSynthesis;

@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Entry, Sense, Settings, TextResult } from "../types";
 import { displayWord, learnExample } from "../lib/library";
 import { Highlight, PhoneticLine, SpeakButton } from "./common";
+import PackImage from "./PackImage";
 
 interface Props {
   entry: Entry;
@@ -49,6 +50,7 @@ export default function TextCard({ entry, sense, settings, intro, onDone }: Prop
           <div className="gloss big">
             {sense.pos} {sense.gloss}
           </div>
+          {sense.part1?.image && <PackImage image={sense.part1.image} alt={`${word} 配图`} className="learn-img" />}
           {ex && (
             <>
               <p className="sentence">
