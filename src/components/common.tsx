@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import Icon from "./Icon";
 import { splitHighlight } from "../lib/util";
 import { speak, speechOptions } from "../lib/speech";
 import type { Choice } from "../lib/questions";
@@ -14,20 +15,24 @@ export function Highlight({ text, word }: { text: string; word: string }) {
 }
 
 /** 朗读按钮（学习句、单词发音等文字可见的场景） */
-export function SpeakButton({ text, settings, label = "🔊", slow }: { text: string; settings: Settings; label?: string; slow?: boolean }) {
+export function SpeakButton({ text, settings, label, slow }: { text: string; settings: Settings; label?: ReactNode; slow?: boolean }) {
   const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   return (
     <span className="speak-wrap">
       <button
         type="button"
-        className="btn ghost small"
+        className={label ? "btn-plain" : "icon-btn"}
         aria-label={`朗读：${text}`}
+        aria-busy={busy}
         onClick={async () => {
+          setBusy(true);
           const r = await speak(text, speechOptions(settings, slow));
+          setBusy(false);
           setErr(r.ok ? null : r.reason);
         }}
       >
-        {label}
+        {label ?? <Icon name="volume" />}
       </button>
       {err && <span className="hint error-text">{err}</span>}
     </span>
@@ -76,4 +81,50 @@ export function ChoiceList({
 
 export function Pill({ children, tone = "plain" }: { children: React.ReactNode; tone?: "plain" | "good" | "warn" | "bad" | "info" }) {
   return <span className={`pill ${tone}`}>{children}</span>;
+}
+
+/**
+ * 音频控件：主按钮播放（播放中显示状态），下方「重听 / 慢速」，状态用文字播报。
+ */
+export function AudioPanel({
+  plays,
+  playing,
+  onPlay,
+  disabled,
+  label = "播放句子",
+}: {
+  plays: number;
+  playing: boolean;
+  onPlay: (slow?: boolean) => void;
+  disabled?: boolean;
+  label?: string;
+}) {
+  return (
+    <div className="audio">
+      <button type="button" className="btn-primary play" onClick={() => onPlay()} disabled={playing || disabled} aria-label="播放句子">
+        <Icon name="volume" />
+        <span>{playing ? "正在播放…" : plays === 0 ? label : "再播放一遍"}</span>
+      </button>
+      <div className="audio-options">
+        <button type="button" className="btn-plain" onClick={() => onPlay()} disabled={playing || disabled || plays === 0}>
+          重听
+        </button>
+        <button type="button" className="btn-plain" onClick={() => onPlay(true)} disabled={playing || disabled}>
+          慢速
+        </button>
+      </div>
+      <p className="notice" aria-live="polite">
+        {playing ? "正在播放" : plays > 0 ? `已听 ${plays} 次` : "还没有播放"}
+      </p>
+    </div>
+  );
+}
+
+/** 作答结果：同时用文字和颜色表示 */
+export function ResultLine({ tone, children }: { tone: "good" | "warn" | "bad"; children: ReactNode }) {
+  return (
+    <div className={`result ${tone}`} role="status">
+      <span aria-hidden="true">{tone === "good" ? "✓" : tone === "warn" ? "≈" : "✗"}</span> {children}
+    </div>
+  );
 }

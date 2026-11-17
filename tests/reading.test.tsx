@@ -9,6 +9,7 @@ import { buildQueue, computeStats, introduce, recordAnswer, trackKey, trackStatu
 import { loadState, saveState } from "../src/lib/storage";
 import SpellingCard from "../src/components/SpellingCard";
 import App from "../src/App";
+import { goTab } from "./ui";
 
 afterEach(() => cleanup());
 
@@ -120,7 +121,8 @@ describe("补全单词：界面", () => {
     s = introduce(s, "carve", "carve#1", "2026-11-10");
     saveState(s);
     render(<App />);
-    fireEvent.click(screen.getByText("托福阅读"));
+    goTab("专项");
+    fireEvent.click(screen.getByRole("button", { name: "开始补词" }));
     fireEvent.click(screen.getByText("第 1 篇 · 地球科学"));
 
     const boxes = screen.getAllByRole("textbox");
@@ -150,7 +152,7 @@ describe("补全单词：界面", () => {
     prep.cloze.blanks.forEach((b, i) => fireEvent.change(boxes[i], { target: { value: b.word === "carved" ? "ves" : b.answer } }));
     fireEvent.click(screen.getByText("提交整篇"));
 
-    expect(screen.getByRole("status").textContent).toContain("得分 9 / 10");
+    expect(document.querySelector(".study .answer")!.textContent).toContain("得分 9 / 10");
     const fb = screen.getByTestId("feedback").textContent!;
     expect(fb).toContain("你的输入：ves");
     expect(fb).toContain("正确字母：ved");
@@ -168,12 +170,13 @@ describe("补全单词：界面", () => {
   it("所有 3 篇都能打开并有 10 个输入框", async () => {
     saveState(await importedState());
     render(<App />);
-    fireEvent.click(screen.getByText("托福阅读"));
+    goTab("专项");
+    fireEvent.click(screen.getByRole("button", { name: "开始补词" }));
     for (const p of PASSAGES) {
       fireEvent.click(screen.getByText(p.title));
       expect(screen.getAllByRole("textbox")).toHaveLength(10);
       for (const t of p.targets) expect(document.body.innerHTML).not.toContain(t.form);
-      fireEvent.click(screen.getByText("← 返回短文列表"));
+      fireEvent.click(screen.getByRole("button", { name: "返回" }));
     }
   });
 

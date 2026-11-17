@@ -1,9 +1,9 @@
-import { useState } from "react";
 import type { ContextResult, Entry, Sense } from "../types";
 import type { SpellingItem } from "../lib/spelling";
 import { isBlankCorrect, splitWord } from "../lib/cloze";
 import BlankInput from "./BlankInput";
-import { Highlight, PhoneticLine } from "./common";
+import { Highlight, PhoneticLine, ResultLine } from "./common";
+import { ActionBar, useCardState } from "./session";
 
 interface Props {
   entry: Entry;
@@ -14,8 +14,8 @@ interface Props {
 
 /** 拼写复习：换一句话，在原位补全单词的后半部分。提交前不显示完整单词和释义 */
 export default function SpellingCard({ entry, sense, item, onDone }: Props) {
-  const [value, setValue] = useState("");
-  const [result, setResult] = useState<ContextResult | null>(null);
+  const [value, setValue] = useCardState("value", "");
+  const [result, setResult] = useCardState<ContextResult | null>("result", null);
   const { prefix, answer } = splitWord(item.form);
   const at = item.text.search(new RegExp(`\\b${item.form}\\b`));
   const before = item.text.slice(0, at);
@@ -23,8 +23,8 @@ export default function SpellingCard({ entry, sense, item, onDone }: Props) {
   const submit = () => setResult(isBlankCorrect({ answer }, value) ? "correct" : "wrong");
 
   return (
-    <div className="card spelling" data-testid="spelling-card">
-      <div className="card-kind">✍️ 拼写复习 · 补全单词</div>
+    <div className="study spelling" data-testid="spelling-card">
+      <span className="pill">拼写复习 · 补全单词</span>
       <p className="sentence big cloze">
         {before}
         <BlankInput
@@ -39,37 +39,37 @@ export default function SpellingCard({ entry, sense, item, onDone }: Props) {
         />
         {after}
       </p>
-      {result === null ? (
-        <div className="actions">
-          <button type="button" className="btn primary" disabled={!value.trim()} onClick={submit}>
-            提交
-          </button>
-        </div>
-      ) : (
-        <div className="reveal">
-          <div className={`result ${result === "correct" ? "good" : "bad"}`}>{result === "correct" ? "拼对了" : "拼错了"}</div>
-          <div className="hint">
+      {result !== null && (
+        <div className="answer">
+          <ResultLine tone={result === "correct" ? "good" : "bad"}>{result === "correct" ? "拼对了" : "拼错了"}</ResultLine>
+          <p className="muted small">
             你的输入：{prefix}
             <b>{value}</b> · 正确：{prefix}
             <b>{answer}</b>
-          </div>
+          </p>
           <p className="sentence">
             <Highlight text={item.text} word={item.form} />
           </p>
-          {item.zh && <p className="zh">{item.zh}</p>}
+          {item.zh && <p className="muted">{item.zh}</p>}
           <div className="word-line">
             <strong>{item.form}</strong> <PhoneticLine entry={entry} />
           </div>
-          <div className="gloss">
+          <p>
             {sense.pos} {sense.gloss}
-          </div>
-          <div className="actions">
-            <button type="button" className="btn primary" onClick={() => onDone(result)}>
-              下一题 →
-            </button>
-          </div>
+          </p>
         </div>
       )}
+      <ActionBar>
+        {result === null ? (
+          <button type="button" className="btn-primary" disabled={!value.trim()} onClick={submit}>
+            提交
+          </button>
+        ) : (
+          <button type="button" className="btn-primary" onClick={() => onDone(result)}>
+            下一题 →
+          </button>
+        )}
+      </ActionBar>
     </div>
   );
 }

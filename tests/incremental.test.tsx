@@ -8,6 +8,7 @@ import { importRows, updateEntry } from "../src/lib/library";
 import { introduce, recordAnswer, trackKey } from "../src/lib/scheduler";
 import { loadState, saveState } from "../src/lib/storage";
 import App from "../src/App";
+import { goTab, openImport } from "./ui";
 
 afterEach(() => cleanup());
 
@@ -88,7 +89,8 @@ describe("增量导入：界面", () => {
     s = introduce(s, "glacier", "glacier#ice", "2026-11-16");
     saveState(s);
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "词库" }));
+    goTab("词库");
+    openImport();
     expect((screen.getByLabelText(/只新增词库里没有的词/) as HTMLInputElement).checked).toBe(true);
     // 顶部选的是「全部」时，必须先选导入到哪个词库
     expect(screen.getByText("先选择导入到哪个词库").closest("button")!.disabled).toBe(true);
@@ -104,7 +106,7 @@ describe("增量导入：界面", () => {
 
     fireEvent.click(screen.getByText("只看新增"));
     const rows = document.querySelectorAll(".word-row");
-    expect(Array.from(rows).map((r) => r.querySelector("b")!.textContent)).toEqual(["sediment", "plateau", "Permanent"]);
+    expect(Array.from(rows).map((r) => r.querySelector("strong")!.textContent)).toEqual(["sediment", "plateau", "Permanent"]);
 
     const saved = loadState();
     expect(saved.order).toHaveLength(261);

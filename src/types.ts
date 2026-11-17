@@ -174,6 +174,8 @@ export interface ReviewLog {
   retry?: boolean;
   /** 自由练习 */
   free?: boolean;
+  /** 这次作答的唯一标识（= 卡片 ID）。同一张卡重复提交只记一次 */
+  attemptId?: string;
 }
 
 /** 托福阅读 · 补全单词：一次整篇作答 */
@@ -216,6 +218,10 @@ export interface Session {
   deck?: DeckFilter;
   queue: Card[];
   index: number;
+  /** 当前卡片的作答阶段（刷新或退出后恢复用） */
+  ui?: { cardId: string; data: Record<string, unknown> };
+  /** 已提交的卡片：cardId → 结果（每张卡只提交一次） */
+  answered?: Record<string, { result: AnyResult; fallback?: boolean }>;
 }
 
 export interface Settings {
@@ -251,6 +257,12 @@ export type ImportMode = "addOnly" | "merge";
 
 export interface AppState {
   version: 1;
+  /** 存储结构版本（增量迁移用，见 storage.ts） */
+  schema?: number;
+  /** 托福补词：每篇短文未提交的输入 */
+  readingDrafts?: Record<string, string[]>;
+  /** 看图学短语：上次看到第几张 */
+  part1Study?: { index: number; category?: string };
   entries: Record<string, Entry>;
   /** 词库显示顺序（导入顺序） */
   order: string[];

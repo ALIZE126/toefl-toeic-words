@@ -63,8 +63,11 @@ export default function Part1ImportPanel({ state, update }: { state: AppState; u
   };
 
   return (
-    <div className="panel" data-testid="part1-import">
-      <h3>🖼 托业 Part 1 图片词库</h3>
+    <div className="import-body" data-testid="part1-import">
+      <h3>托业 Part 1 图片包</h3>
+      <p className="target-line">
+        目标词库：<b>托业</b>（Part 1 图片包固定导入托业词库，已有同名词会同时加入托业）
+      </p>
       <p className="hint">
         选择图片包 ZIP（里面有 toeic-part1-phrases-with-images.json 和 images/ 文件夹）。确认前会先显示能导入多少词条和图片。图片保存在本机浏览器的
         IndexedDB 里。
@@ -72,8 +75,8 @@ export default function Part1ImportPanel({ state, update }: { state: AppState; u
       {!imageStoreSupported() && <div className="banner error">当前浏览器不支持 IndexedDB，图片无法保存。</div>}
       <ImageStatus state={state} showOk />
       <div className="row">
-        <button className="btn primary" disabled={!!busy} onClick={() => fileRef.current?.click()}>
-          {busy ?? "导入 Part 1 图片词库 (.zip)"}
+        <button type="button" className="btn-primary" disabled={!!busy} onClick={() => fileRef.current?.click()}>
+          {busy ?? "选择图片包 .zip"}
         </button>
         <input
           ref={fileRef}
@@ -84,7 +87,14 @@ export default function Part1ImportPanel({ state, update }: { state: AppState; u
           onChange={(e) => e.target.files?.[0] && pick(e.target.files[0])}
         />
       </div>
-      {error && <div className="banner error">导入失败：{error}</div>}
+      {error && (
+        <div className="banner error" role="alert">
+          导入失败：{error}
+          <button type="button" className="btn-secondary small" disabled={!!busy} onClick={() => (pack ? confirm() : fileRef.current?.click())}>
+            {pack ? "重试导入" : "重新选择文件"}
+          </button>
+        </div>
+      )}
 
       {pack && plan && (
         <div className="banner" data-testid="part1-preview">

@@ -23,6 +23,7 @@ import { loadState, saveState } from "../src/lib/storage";
 import { updateEntry } from "../src/lib/library";
 import Part1Card from "../src/components/Part1Card";
 import App from "../src/App";
+import { goTab, openImport } from "./ui";
 import type { AppState, Session } from "../src/types";
 
 const ZIP = "toeic-part1-image-pack.zip";
@@ -336,9 +337,11 @@ describe("整个应用", () => {
   it("词库 → 托业：导入 Part 1 图片词库（先预览再确认），按 Part 1 / 类别筛选，词条页能看无配对题的图片", async () => {
     saveState(await importedState());
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "词库" }));
+    goTab("词库");
     expect(screen.queryByTestId("part1-zip-input")).toBeNull();
-    fireEvent.click(within(screen.getByRole("group", { name: "词库" })).getByRole("button", { name: /^托业/ }));
+    openImport("Part 1 图片包");
+    // 导入面板明确写出目标词库
+    expect(screen.getByTestId("part1-import").textContent).toContain("目标词库：托业");
     const file = new File([packZip().slice().buffer as ArrayBuffer], ZIP);
     fireEvent.change(screen.getByTestId("part1-zip-input"), { target: { files: [file] } });
     const preview = await screen.findByTestId("part1-preview", {}, { timeout: 20000 });
@@ -354,8 +357,12 @@ describe("整个应用", () => {
     expect(report.textContent).toContain("240 条短语，新增 239 个词条，复用已有义项 1 个");
     expect(report.textContent).toContain("新保存 240 张");
     expect(loadState().order).toHaveLength(497);
+    fireEvent.click(screen.getByRole("button", { name: "收起导入面板" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Part 1 (240)" }));
+    // 列表每次显示 120 条，「再显示」加载剩下的
+    expect(document.querySelectorAll(".word-row")).toHaveLength(120);
+    fireEvent.click(screen.getByRole("button", { name: /再显示 120 个（共 240）/ }));
     expect(document.querySelectorAll(".word-row")).toHaveLength(240);
     expect(screen.getByRole("button", { name: "人物动作 (173)" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "物体状态 (72)" })).toBeTruthy();
@@ -376,8 +383,11 @@ describe("整个应用", () => {
     saveState({ ...state, settings: { ...state.settings, deck: "toeic" } });
     render(<App />);
     const entry = screen.getByTestId("part1-entry");
-    expect(entry.textContent).toContain("看图学短语 240 张配图 · 听音选图可判分 2 题（待复习 0，新题 2）");
-    fireEvent.click(within(entry).getByText("进入 Part 1 专项"));
+    expect(entry.textContent).toContain("托业 Part 1 · 配图 240 · 听音选图 2 题");
+    fireEvent.click(within(entry).getByRole("button", { name: "进入 Part 1 专项" }));
+    // 专项页把配图数和可判分题数分开呈现
+    expect(document.body.textContent).toContain("配图 240 张");
+    expect(document.body.textContent).toContain("可判分 2 题 · 待复习 0 · 新题 2");
     fireEvent.click(screen.getByText("开始听音选图（2 题）"));
 
     const answerWrong = async () => {
@@ -403,13 +413,16 @@ describe("整个应用", () => {
       fireEvent.click(screen.getByText("下一题 →"));
     };
 
-    expect(document.body.textContent).toContain("第 1 / 2 张 · Part 1 听音选图");
+    expect(document.body.textContent).toContain("Part 1 · 听音选图");
+    expect(document.querySelector(".focus-count")!.textContent).toBe("1 / 2");
     await answerWrong(); // reach for 答错 → 隔几题重做
     expect(spoken[0]).toBe("The woman is reaching for a cup.");
     await answerRight(); // hold
-    expect(document.body.textContent).toContain("第 3 / 3 张 · Part 1 听音选图 · 重做");
+    expect(document.querySelector(".focus-title")!.textContent).toBe("Part 1 · 听音选图 · 重做");
+    expect(document.querySelector(".focus-count")!.textContent).toBe("3 / 3");
     await answerRight(); // reach for 重做
-    expect(document.body.textContent).toContain("这一轮听音选图做完了");
+    expect(document.body.textContent).toContain("这一轮完成了");
+    expect(document.body.textContent).toContain("答错的题已经安排到明天复习");
 
     const saved = loadState();
     expect(saved.tracks[trackKey("reach for#p153", "part1")]).toMatchObject({ lapses: 1, stage: 0 });
@@ -421,7 +434,9 @@ describe("整个应用", () => {
       ["first", true],
     ]);
 
-    fireEvent.click(screen.getByRole("button", { name: "学习记录" }));
+    fireEvent.click(screen.getByRole("button", { name: "回到 Part 1 专项" }));
+    goTab("记录");
+    expect(screen.getByTestId("part1-stat").textContent).toContain("1 / 2");
     expect(screen.getByTestId("part1-stat").textContent).toContain("50%");
     expect(screen.getByTestId("part1-stat").textContent).toContain("本轮重做 1 次（答对 1），不计入");
   });
@@ -499,7 +514,7 @@ describe("练习题（自动出题，只算练习）", () => {
     const { state } = await withPack();
     saveState({ ...state, settings: { ...state.settings, deck: "toeic" } });
     render(<App />);
-    fireEvent.click(screen.getByText("进入 Part 1 专项"));
+    fireEvent.click(screen.getByRole("button", { name: "进入 Part 1 专项" }));
     const panel = screen.getByTestId("part1-practice");
     expect(within(panel).getByRole("button", { name: "开始练习（10 题）" })).toBeTruthy();
     fireEvent.click(within(panel).getByRole("button", { name: "5" }));
@@ -511,7 +526,8 @@ describe("练习题（自动出题，只算练习）", () => {
     expect(within(panel).getByRole("button", { name: "开始练习（11 题）" })).toBeTruthy();
     fireEvent.click(within(panel).getByRole("button", { name: "开始练习（11 题）" }));
 
-    expect(document.body.textContent).toContain("第 1 / 11 张 · Part 1 听音选图 · 练习题");
+    expect(document.querySelector(".focus-title")!.textContent).toBe("Part 1 · 练习题");
+    expect(document.querySelector(".focus-count")!.textContent).toBe("1 / 11");
     const saved = loadState();
     const card = saved.session!.queue[0];
     expect(screen.getByTestId("part1-card").textContent).toContain("练习题（不计入复习）");
@@ -543,7 +559,7 @@ describe("下次打开时图片仍能加载", () => {
     saveState({ ...state, settings: { ...state.settings, deck: "toeic" } });
     await clearImages(); // 模拟换了网址或浏览器：词库还在，图片不在
     render(<App />);
-    fireEvent.click(screen.getByText("进入 Part 1 专项"));
+    fireEvent.click(screen.getByRole("button", { name: "进入 Part 1 专项" }));
     expect((await screen.findByTestId("image-status")).textContent).toContain("有 240 / 240 个词条的图片不在这台设备的浏览器里");
   });
 
@@ -551,7 +567,8 @@ describe("下次打开时图片仍能加载", () => {
     const { state } = await withPack();
     saveState({ ...state, settings: { ...state.settings, deck: "toeic" } });
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "词库" }));
+    goTab("词库");
+    openImport("Part 1 图片包");
     expect((await screen.findByTestId("image-status")).textContent).toBe("本机图片库：240 张，词条引用的 240 张都在。");
   });
 });

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { importedState, loadFixtureRows } from "./helpers";
 import { importRows, updateEntry } from "../src/lib/library";
 import { deckCount, migrateDecks, scopeState } from "../src/lib/decks";
@@ -7,6 +7,7 @@ import { buildQueue, computeStats, introduce, newQuota, recordAnswer, trackKey }
 import { STORAGE_KEY, loadState, saveState } from "../src/lib/storage";
 import type { AppState } from "../src/types";
 import App from "../src/App";
+import { goTab, openImport, setDeck } from "./ui";
 
 afterEach(() => cleanup());
 
@@ -109,18 +110,17 @@ describe("分词库：界面", () => {
     const { state } = await twoDecks();
     saveState(state);
     render(<App />);
-    const bar = screen.getByRole("group", { name: "词库" });
-    expect(within(bar).getByRole("button", { name: "全部 263" })).toBeTruthy();
-    expect(within(bar).getByRole("button", { name: "托福 258" })).toBeTruthy();
-    fireEvent.click(within(bar).getByRole("button", { name: "托业 8" }));
-    expect(document.body.textContent).toContain("今日复习 · ");
-    expect(document.body.textContent).toContain("托业词库");
+    const opts = () => Array.from((screen.getByLabelText("词库范围") as HTMLSelectElement).options).map((o) => o.textContent);
+    expect(opts()).toEqual(["全部词库 · 263", "托福词库 · 258", "托业词库 · 8"]);
+    setDeck("toeic");
+    expect(screen.getByTestId("today-hero").textContent).toContain("今日任务 · 托业词库");
 
-    fireEvent.click(screen.getByRole("button", { name: "词库" }));
-    const words = Array.from(document.querySelectorAll(".word-row b")).map((b) => b.textContent);
+    goTab("词库");
+    const words = Array.from(document.querySelectorAll(".word-row strong")).map((b) => b.textContent);
     // 按词本原始顺序：policy (第 101 行)、seminar (214)、postpone (215)，然后是新增的托业词
     expect(words).toEqual(["policy", "seminar", "postpone", "invoice", "reimburse", "itinerary", "warehouse", "quarterly"]);
     // 当前在托业词库时，导入默认导入到托业
+    openImport();
     expect((screen.getByLabelText("托业词库") as HTMLInputElement).checked).toBe(true);
 
     // 把 invoice 也加入托福
@@ -131,13 +131,14 @@ describe("分词库：界面", () => {
     expect(toeic.disabled).toBe(true); // 只剩一个词库时不能取消
     fireEvent.click(toefl);
     expect(loadState().entries["invoice"].decks).toEqual(["toeic", "toefl"]);
-    expect(within(bar).getByRole("button", { name: "托福 259" })).toBeTruthy();
+    expect(opts()[1]).toBe("托福词库 · 259");
   });
 
   it("导入时选托业词库，新词进入托业", async () => {
     saveState(await importedState());
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "词库" }));
+    goTab("词库");
+    openImport();
     fireEvent.click(screen.getByLabelText("托业词库"));
     const { rows } = await loadFixtureRows();
     expect(rows.length).toBe(258);

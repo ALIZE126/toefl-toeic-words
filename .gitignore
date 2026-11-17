@@ -6,3 +6,6 @@ dist
 # 真实生词本（个人数据），不上传
 fixtures/
 .netlify
+
+# 设计参考（含图片包里的配图），不上传
+design-reference/

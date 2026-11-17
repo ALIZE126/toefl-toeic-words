@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { importedState } from "./helpers";
 import ListeningCard from "../src/components/ListeningCard";
 import App from "../src/App";
+import { goTab } from "./ui";
 import { listenChoices } from "../src/lib/questions";
 import { introduce, recordAnswer } from "../src/lib/scheduler";
 import { saveState } from "../src/lib/storage";
@@ -109,7 +110,7 @@ describe("整个应用：今日复习与词库状态", () => {
     saveState(state);
 
     render(<App />);
-    fireEvent.click(screen.getByText(/开始今日复习/));
+    fireEvent.click(screen.getByRole("button", { name: /开始今日学习/ }));
     expect(screen.getByTestId("listening-card")).toBeTruthy();
     const html = document.body.innerHTML;
     expect(html.toLowerCase()).not.toContain("postpone");
@@ -128,7 +129,8 @@ describe("整个应用：今日复习与词库状态", () => {
       const x = new Date(t.getFullYear(), t.getMonth(), t.getDate() + n);
       return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
     };
-    const card = (type: "text" | "listening") => ({ id: type, type, entryId: "seminar", senseId: "seminar#meeting", exampleId: "seminar#meeting/test1" });
+    let n = 0;
+    const card = (type: "text" | "listening") => ({ id: `${type}-${++n}`, type, entryId: "seminar", senseId: "seminar#meeting", exampleId: "seminar#meeting/test1" });
     state = introduce(state, "seminar", "seminar#meeting", d(-7));
     state = recordAnswer(state, { card: card("text"), result: "good", day: d(-6) });
     state = recordAnswer(state, { card: card("text"), result: "good", day: d(-4) });
@@ -137,11 +139,11 @@ describe("整个应用：今日复习与词库状态", () => {
     saveState(state);
 
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "词库" }));
-    fireEvent.click(screen.getByText("学习中"));
+    goTab("词库");
+    fireEvent.click(screen.getByRole("button", { name: "学习中" }));
     const row = screen.getByText("seminar").closest("button")!;
-    expect(row.textContent).toContain("文字已掌握");
-    expect(row.textContent).toContain("听力待复习");
+    // 列表里显示整体状态：有一项待复习就显示「待复习」
+    expect(row.textContent).toContain("待复习");
 
     fireEvent.click(row);
     expect(document.body.textContent).toContain("文字回忆：已掌握");

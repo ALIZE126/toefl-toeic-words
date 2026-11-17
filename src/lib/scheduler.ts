@@ -166,6 +166,8 @@ export interface GradeInput {
 export function recordAnswer(state: AppState, input: GradeInput): AppState {
   const { card, result, day } = input;
   if (card.type === "learn") return state;
+  // 同一张卡（同一次作答）只提交一次：连续点击、刷新后重复提交都不会重复记录
+  if (state.logs.some((l) => l.attemptId === card.id)) return state;
   const kind = card.type;
   const key = trackKey(card.senseId, kind);
   const practice = !!card.intro || !!card.retry || !!card.free || !!input.audioFallback;
@@ -202,6 +204,7 @@ export function recordAnswer(state: AppState, input: GradeInput): AppState {
     chosen: input.chosen,
     retry: card.retry ? true : undefined,
     free: card.free || undefined,
+    attemptId: card.id,
   };
   return { ...state, tracks, logs: [...state.logs, log] };
 }
@@ -318,7 +321,7 @@ export function advanceSession(session: Session, failed: boolean): Session {
     const at = Math.min(session.index + 1 + RETRY_GAP, queue.length);
     queue.splice(at, 0, { ...card, id: uid("c"), retry: (card.retry ?? 0) + 1 });
   }
-  return { ...session, queue, index: session.index + 1 };
+  return { ...session, queue, index: session.index + 1, ui: undefined };
 }
 
 /** 统计：正式复习（不含本轮重做和初学当天回忆） */

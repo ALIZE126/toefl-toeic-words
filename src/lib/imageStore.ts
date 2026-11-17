@@ -108,6 +108,75 @@ export async function putImages(items: { sha256: string; type: string; data: Arr
 }
 
 const urlCache = new Map<string, string>();
+/** 正在显示的图片数：sha256 → 使用者数量。归零一段时间后释放 object URL */
+const users = new Map<string, number>();
+const releaseTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const RELEASE_DELAY_MS = 60_000;
+const resetListeners = new Set<() => void>();
+
+/** 页面从后台恢复时通知图片组件重新读取（iOS 恢复后旧的 blob URL 可能失效） */
+export function onImagesReset(cb: () => void): () => void {
+  resetListeners.add(cb);
+  return () => resetListeners.delete(cb);
+}
+
+/** 丢弃某张图（或全部）的 object URL，下次显示时重新从 IndexedDB 读取 */
+export function invalidateImage(sha256?: string) {
+  const list = sha256 ? [sha256] : [...urlCache.keys()];
+  for (const k of list) {
+    const url = urlCache.get(k);
+    if (url) URL.revokeObjectURL?.(url);
+    urlCache.delete(k);
+    clearTimeout(releaseTimers.get(k));
+    releaseTimers.delete(k);
+  }
+  if (!sha256) resetListeners.forEach((cb) => cb());
+}
+
+if (typeof window !== "undefined") {
+  let hiddenAt = 0;
+  document.addEventListener?.("visibilitychange", () => {
+    if (document.visibilityState === "hidden") hiddenAt = Date.now();
+    else if (hiddenAt && Date.now() - hiddenAt > 30_000) invalidateImage();
+  });
+  // 从往返缓存（bfcache）恢复的页面
+  window.addEventListener?.("pageshow", (e) => {
+    if ((e as PageTransitionEvent).persisted) invalidateImage();
+  });
+}
+
+/** 开始使用一张图：返回 object URL（没有这张图为 null）和释放函数 */
+export async function acquireImageUrl(sha256: string): Promise<{ url: string | null; release: () => void }> {
+  const url = await getImageUrl(sha256);
+  if (!url) return { url: null, release: () => {} };
+  users.set(sha256, (users.get(sha256) ?? 0) + 1);
+  clearTimeout(releaseTimers.get(sha256));
+  releaseTimers.delete(sha256);
+  let released = false;
+  return {
+    url,
+    release: () => {
+      if (released) return;
+      released = true;
+      const n = (users.get(sha256) ?? 1) - 1;
+      if (n > 0) return void users.set(sha256, n);
+      users.delete(sha256);
+      releaseTimers.set(
+        sha256,
+        setTimeout(() => {
+          if (!users.get(sha256)) invalidateImageQuiet(sha256);
+        }, RELEASE_DELAY_MS),
+      );
+    },
+  };
+}
+
+function invalidateImageQuiet(sha256: string) {
+  const url = urlCache.get(sha256);
+  if (url) URL.revokeObjectURL?.(url);
+  urlCache.delete(sha256);
+  releaseTimers.delete(sha256);
+}
 
 /** 取图片的 object URL；本机确实没有这张图时返回 null，读取出错时抛出异常 */
 export async function getImageUrl(sha256: string): Promise<string | null> {
@@ -133,12 +202,16 @@ export async function requestPersistence(): Promise<void> {
 /** 测试用：模拟浏览器在后台单方面关掉连接（不通知页面） */
 export function dropConnectionForTests() {
   urlCache.clear();
+  users.clear();
   dbRef?.close();
 }
 
 /** 测试用：清空缓存和连接 */
 export function resetImageStoreForTests() {
   urlCache.clear();
+  users.clear();
+  releaseTimers.forEach(clearTimeout);
+  releaseTimers.clear();
   dbRef?.close();
   dbRef = null;
   dbPromise = null;
