@@ -8,6 +8,7 @@ import { STATUS_LABEL, trackKey, trackStatus } from "../lib/scheduler";
 import { Pill } from "../components/common";
 import EntryEditor from "../components/EntryEditor";
 import Part1ImportPanel from "../components/Part1ImportPanel";
+import AudioPackImport from "../components/AudioPackImport";
 import { hasPart1, part1Categories } from "../lib/part1";
 import { useNav } from "../components/nav";
 import Icon from "../components/Icon";
@@ -215,7 +216,7 @@ function StatusPill({ state, entryId, today }: { state: AppState; entryId: strin
 function ImportPanel({ state, update, onClose, onShowRecent }: { state: AppState; update: Update; onClose: () => void; onShowRecent: () => void }) {
   const nav = useNav();
   const viewDeck = state.settings.deck;
-  const [kind, setKind] = useState<"docx" | "part1">(nav.route.sub === "import-part1" ? "part1" : "docx");
+  const [kind, setKind] = useState<"docx" | "part1" | "audio">(nav.route.sub === "import-part1" ? "part1" : "docx");
   const [report, setReport] = useState<ImportReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -256,6 +257,9 @@ function ImportPanel({ state, update, onClose, onShowRecent }: { state: AppState
           <button type="button" role="tab" aria-selected={kind === "part1"} className="filter" aria-pressed={kind === "part1"} onClick={() => setKind("part1")}>
             Part 1 图片包
           </button>
+          <button type="button" role="tab" aria-selected={kind === "audio"} className="filter" aria-pressed={kind === "audio"} onClick={() => setKind("audio")}>
+            AI 语音包
+          </button>
         </div>
         {hasAny && (
           <button type="button" className="icon-btn" aria-label="收起导入面板" onClick={onClose}>
@@ -266,6 +270,8 @@ function ImportPanel({ state, update, onClose, onShowRecent }: { state: AppState
 
       {kind === "part1" ? (
         <Part1ImportPanel state={state} update={update} />
+      ) : kind === "audio" ? (
+        <AudioPackImport />
       ) : (
         <div className="import-body">
           <fieldset className="import-mode">

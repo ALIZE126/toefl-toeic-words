@@ -1,3 +1,4 @@
+import { audioCount, getAudio, hasAudio } from "./audioStore";
 /** 浏览器语音合成（Web Speech API）封装，带可用性检测 */
 
 export type SpeakOutcome = { ok: true } | { ok: false; reason: string };
@@ -75,6 +76,10 @@ export interface SpeakOptions {
   voiceURI?: string;
   /** 先把耳机切过来（见 startHandoff） */
   handoff?: boolean;
+  /** 有 AI 语音（音频包）时优先播放；false = 一律用系统语音 */
+  ai?: boolean;
+  /** 慢速：AI 音频减速播放（音调不变） */
+  slow?: boolean;
 }
 
 /** iPhone / iPad（iPadOS 的 Safari 会伪装成 Mac，用触点数区分） */
@@ -83,8 +88,74 @@ export function isAppleMobile(): boolean {
   return /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && (navigator.maxTouchPoints ?? 0) > 1);
 }
 
-export function speechOptions(settings: { rate: number; voiceURI?: string; audioHandoff?: boolean }, slow = false): SpeakOptions {
-  return { rate: slow ? 0.7 : settings.rate, voiceURI: settings.voiceURI, handoff: settings.audioHandoff ?? isAppleMobile() };
+export function speechOptions(settings: { rate: number; voiceURI?: string; audioHandoff?: boolean; aiVoice?: boolean }, slow = false): SpeakOptions {
+  return {
+    rate: slow ? 0.7 : settings.rate,
+    voiceURI: settings.voiceURI,
+    handoff: settings.audioHandoff ?? isAppleMobile(),
+    ai: settings.aiVoice !== false,
+    slow: slow || undefined,
+  };
+}
+
+/* ───────────── AI 语音（音频包）播放 ─────────────
+ * 用同一个 <audio> 播放。iOS 只允许在点击事件里开始播放，所以点击时先同步解锁这个播放器，
+ * 再去 IndexedDB 读音频、换上音源播放。
+ */
+let player: HTMLAudioElement | null = null;
+let playerUrl: string | null = null;
+let unlocked = false;
+
+function unlockPlayer(): HTMLAudioElement | null {
+  if (typeof Audio === "undefined") return null;
+  try {
+    player ??= new Audio();
+    player.setAttribute("playsinline", "");
+    if (!unlocked) {
+      unlocked = true;
+      player.src = silentWavUrl(1);
+      const r = player.play() as Promise<void> | undefined;
+      r?.then?.(() => player?.pause()).catch?.(() => {});
+    }
+    return player;
+  } catch {
+    return null;
+  }
+}
+
+/** 播放音频包里的这句话；没有这句、或播放失败时返回 null（改用系统语音） */
+async function playRecorded(text: string, opts: SpeakOptions, el: HTMLAudioElement): Promise<SpeakOutcome | null> {
+  const rec = await getAudio(text).catch(() => undefined);
+  if (!rec) return null;
+  if (playerUrl) URL.revokeObjectURL(playerUrl);
+  playerUrl = URL.createObjectURL(new Blob([rec.data], { type: rec.type || "audio/mpeg" }));
+  el.pause();
+  el.src = playerUrl;
+  el.playbackRate = opts.slow ? 0.75 : Math.min(1.2, Math.max(0.6, opts.rate ?? 1));
+  (el as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (r: SpeakOutcome | null) => {
+      if (!settled) {
+        settled = true;
+        resolve(r);
+      }
+    };
+    el.onplaying = () => finish({ ok: true });
+    el.onerror = () => finish(null);
+    try {
+      const p = el.play() as Promise<void> | undefined;
+      p?.catch?.(() => finish(null));
+    } catch {
+      finish(null);
+    }
+    setTimeout(() => finish(null), 4000);
+  });
+}
+
+/** 这句话有没有 AI 语音 */
+export function hasRecorded(text: string): boolean {
+  return hasAudio(text);
 }
 
 /* ───────────── 耳机自动切换 ─────────────
@@ -160,15 +231,24 @@ function stopHandoffAudio() {
 export function resetHandoffForTests() {
   handoffAudio = null;
   lastHandoff = 0;
+  player = null;
+  unlocked = false;
 }
 
 export async function speak(text: string, opts: SpeakOptions = {}): Promise<SpeakOutcome> {
-  // 第一个 await 之前同步开始静音播放，仍在用户点击的事件里
+  // 第一个 await 之前同步开始静音播放、解锁播放器，仍在用户点击的事件里
   const wait = opts.handoff ? startHandoff() : false;
+  const useAi = opts.ai !== false && audioCount() > 0 && hasAudio(text);
+  const el = useAi ? unlockPlayer() : null;
   try {
     if (wait) {
       await new Promise((r) => setTimeout(r, HANDOFF_WAIT_MS));
       stopHandoffAudio();
+    }
+    if (el) {
+      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+      const r = await playRecorded(text, opts, el);
+      if (r) return r;
     }
     return await speakInner(text, opts);
   } catch (e) {
@@ -213,5 +293,10 @@ async function speakInner(text: string, opts: SpeakOptions): Promise<SpeakOutcom
 }
 
 export function stopSpeaking() {
+  try {
+    player?.pause();
+  } catch {
+    /* 忽略 */
+  }
   if (speechSupported()) window.speechSynthesis.cancel();
 }

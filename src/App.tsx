@@ -9,6 +9,7 @@ import { getToday, toDay } from "./lib/util";
 import { DECK_NAME, deckCount } from "./lib/decks";
 import type { DeckFilter } from "./types";
 import { useAvoidHostBadge } from "./lib/hostBadge";
+import { loadAudioIndex } from "./lib/audioStore";
 import Icon, { type IconName } from "./components/Icon";
 import { FocusProvider, NavCtx, TAB_LABEL, type Nav, type Route, type Tab } from "./components/nav";
 
@@ -49,6 +50,11 @@ export default function App() {
     }),
     [route, go, practice.open],
   );
+
+  // 启动时读取本机的 AI 语音索引，之后播放时同步判断有没有这句的音频
+  useEffect(() => {
+    void loadAudioIndex();
+  }, []);
 
   // 其他组件请求跳转（例如图片缺失时「重新关联图片包」）
   useEffect(() => {

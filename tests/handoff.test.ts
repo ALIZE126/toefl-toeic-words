@@ -85,7 +85,7 @@ describe("播放时把耳机切到这台设备", () => {
     expect(speechOptions({ rate: 1, audioHandoff: false }).handoff).toBe(false);
     ua.mockReturnValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15");
     expect(speechOptions({ rate: 1 }).handoff).toBe(false);
-    expect(speechOptions({ rate: 1, audioHandoff: true }, true)).toEqual({ rate: 0.7, voiceURI: undefined, handoff: true });
+    expect(speechOptions({ rate: 1, audioHandoff: true }, true)).toEqual({ rate: 0.7, voiceURI: undefined, handoff: true, ai: true, slow: true });
     ua.mockRestore();
   });
 });

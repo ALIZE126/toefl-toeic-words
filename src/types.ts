@@ -232,6 +232,8 @@ export interface Settings {
   voiceURI?: string;
   /** 播放前先用一段静音的媒体播放把耳机（AirPods）切到这台设备；未设置时 iPhone / iPad 默认开启 */
   audioHandoff?: boolean;
+  /** 有 AI 语音（音频包）的句子优先播放 AI 语音，默认开启 */
+  aiVoice?: boolean;
   /** Part 1 练习题每轮题数，0 = 全部 */
   part1PracticeCount?: number;
   /** 顶部选中的词库（今日复习 / 词库 / 学习记录按它筛选） */

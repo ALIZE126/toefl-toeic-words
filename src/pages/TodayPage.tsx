@@ -9,6 +9,7 @@ import { part1Counts, part1Items } from "../components/Part1Hub";
 import PackImage from "../components/PackImage";
 import Icon from "../components/Icon";
 import { useNav } from "../components/nav";
+import { useAudioCount } from "../components/AudioPackImport";
 import { cardLabel, sessionActive, sessionTitle } from "./PracticePage";
 
 interface Props {
@@ -195,9 +196,34 @@ function Settings({ state, update }: { state: AppState; update: Update }) {
           <b>播放时把耳机切到这台设备</b>：AirPods 同时连着 Mac 和 iPhone 时，点播放会先让耳机切过来（第一次播放约等 1 秒）
         </span>
       </label>
+      <AiVoiceSetting state={state} update={update} />
       <VoicePicker state={state} update={update} />
       <p className="muted small">顺序：先听力（避免先看到文字），再 Part 1 选图、新句理解、文字回忆、拼写，最后学新词。初学后第 1、3、7 天复习。</p>
     </details>
+  );
+}
+
+function AiVoiceSetting({ state, update }: { state: AppState; update: Update }) {
+  const nav = useNav();
+  const n = useAudioCount();
+  return (
+    <div className="setting-block">
+      <label className="setting">
+        <input
+          type="checkbox"
+          checked={state.settings.aiVoice !== false}
+          onChange={(e) => update((st) => ({ ...st, settings: { ...st.settings, aiVoice: e.target.checked } }))}
+        />
+        <span>
+          <b>优先使用 AI 语音</b>：本机已有 {n} 条 AI 合成语音（ElevenLabs，美 / 英 / 澳口音轮换）。有 AI 语音的句子播放音频，其余用下面的系统语音。
+        </span>
+      </label>
+      {n === 0 && (
+        <button type="button" className="btn-plain" onClick={() => nav.go({ tab: "library", sub: "import" })}>
+          去「词库 → 导入 → AI 语音包」导入
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -252,7 +278,7 @@ function VoicePicker({ state, update }: { state: AppState; update: Update }) {
         </label>
       )}
       <p className="muted small">
-        正在使用：{using ? name(using) : "系统默认"}。浏览器提供了 {all} 个语音，其中英文 {voices.length} 个、高级版或增强版 {good} 个。
+        系统语音正在使用：{using ? name(using) : "系统默认"}。浏览器提供了 {all} 个语音，其中英文 {voices.length} 个、高级版或增强版 {good} 个。
       </p>
       <div className="row wrap">
         <button

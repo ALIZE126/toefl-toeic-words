@@ -22,3 +22,5 @@ let packBytes: Uint8Array | null = null;
 export function packZip(): Uint8Array {
   return (packBytes ??= new Uint8Array(readFileSync(PACK_PATH)));
 }
+
+export const AUDIO_PACK_PATH = resolve(__dirname, "../fixtures/toeic-part1-audio-pack.zip");

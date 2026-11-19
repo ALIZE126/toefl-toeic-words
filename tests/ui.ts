@@ -11,7 +11,7 @@ export function setDeck(deck: "all" | "toefl" | "toeic") {
 }
 
 /** 词库页打开导入面板 */
-export function openImport(kind: "Word 生词本" | "Part 1 图片包" = "Word 生词本") {
+export function openImport(kind: "Word 生词本" | "Part 1 图片包" | "AI 语音包" = "Word 生词本") {
   if (!document.getElementById("import-panel")) fireEvent.click(screen.getByRole("button", { name: "导入" }));
   fireEvent.click(screen.getByRole("tab", { name: kind }));
 }
