@@ -26,18 +26,45 @@ export function loadVoices(timeoutMs = 1500): Promise<SpeechSynthesisVoice[]> {
   });
 }
 
+/** 语音质量：Apple 的 voiceURI 里带等级（com.apple.voice.premium / enhanced / compact），其他平台看名字 */
+export type VoiceQuality = "premium" | "enhanced" | "standard";
+export function voiceQuality(v: Pick<SpeechSynthesisVoice, "voiceURI" | "name">): VoiceQuality {
+  const s = `${v.voiceURI} ${v.name}`.toLowerCase();
+  if (/premium|高级|neural|natural/.test(s)) return "premium";
+  if (/enhanced|增强/.test(s)) return "enhanced";
+  return "standard";
+}
+export const QUALITY_LABEL: Record<VoiceQuality, string> = { premium: "高级版", enhanced: "增强版", standard: "标准" };
+const RANK: Record<VoiceQuality, number> = { premium: 0, enhanced: 1, standard: 2 };
+
+/** 英文语音，高级版在前 */
 export function englishVoices(voices: SpeechSynthesisVoice[] = voicesCache): SpeechSynthesisVoice[] {
-  return voices.filter((v) => /^en[-_]/i.test(v.lang));
+  return voices.filter((v) => /^en[-_]/i.test(v.lang)).sort((a, b) => RANK[voiceQuality(a)] - RANK[voiceQuality(b)]);
+}
+
+/** 重新向系统要一次语音列表（下载新语音后用） */
+export function refreshVoices(): Promise<SpeechSynthesisVoice[]> {
+  voicesCache = [];
+  return loadVoices(2500);
 }
 
 function pickVoice(voiceURI?: string): SpeechSynthesisVoice | undefined {
   const en = englishVoices();
+  const us = en.filter((v) => /en[-_]US/i.test(v.lang));
   return (
     en.find((v) => v.voiceURI === voiceURI) ??
-    en.find((v) => /en[-_]US/i.test(v.lang) && /Samantha|Alex|Ava|Allison|Google US/i.test(v.name)) ??
-    en.find((v) => /en[-_]US/i.test(v.lang)) ??
+    // 没手动选：优先高级版 / 增强版的美式语音，其次常见的美式语音
+    us.find((v) => voiceQuality(v) !== "standard") ??
+    en.find((v) => voiceQuality(v) !== "standard") ??
+    us.find((v) => /Samantha|Alex|Ava|Allison|Google US/i.test(v.name)) ??
+    us[0] ??
     en[0]
   );
+}
+
+/** 当前实际会用哪个语音（设置页显示用） */
+export function currentVoice(voiceURI?: string) {
+  return pickVoice(voiceURI);
 }
 
 /**

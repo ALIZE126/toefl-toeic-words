@@ -3,7 +3,7 @@ import type { AppState, TrackKind } from "../types";
 import type { Update } from "../store";
 import { buildQueue, dueTracks, newCandidates, newQuota } from "../lib/scheduler";
 import { DECK_NAME, scopeState } from "../lib/decks";
-import { englishVoices, isAppleMobile, loadVoices, speechSupported } from "../lib/speech";
+import { QUALITY_LABEL, currentVoice, englishVoices, isAppleMobile, loadVoices, refreshVoices, speak, speechOptions, speechSupported, voiceQuality } from "../lib/speech";
 import { PASSAGES } from "../data/passages";
 import { part1Counts, part1Items } from "../components/Part1Hub";
 import PackImage from "../components/PackImage";
@@ -203,30 +203,92 @@ function Settings({ state, update }: { state: AppState; update: Update }) {
 
 function VoicePicker({ state, update }: { state: AppState; update: Update }) {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[] | null>(null);
+  const [all, setAll] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const read = (fresh: boolean) => {
+    setBusy(true);
+    return (fresh ? refreshVoices() : loadVoices()).then((v) => {
+      setAll(v.length);
+      setVoices(englishVoices(v));
+      setBusy(false);
+      return v;
+    });
+  };
   useEffect(() => {
     let alive = true;
-    loadVoices().then((v) => alive && setVoices(englishVoices(v)));
+    loadVoices().then((v) => {
+      if (!alive) return;
+      setAll(v.length);
+      setVoices(englishVoices(v));
+    });
     return () => {
       alive = false;
     };
   }, []);
   if (!speechSupported()) return <div className="banner error">当前浏览器不支持语音合成，听力题可改做文字题。</div>;
   if (voices === null) return <p className="muted small">正在读取系统语音…</p>;
-  if (!voices.length) return <div className="banner warn">没有找到英文语音。听力题会提示改做文字题。</div>;
+  const name = (v: SpeechSynthesisVoice) => `${v.name} · ${v.lang}${voiceQuality(v) !== "standard" ? ` · ${QUALITY_LABEL[voiceQuality(v)]}` : ""}`;
+  const using = currentVoice(state.settings.voiceURI);
+  const good = voices.filter((v) => voiceQuality(v) !== "standard").length;
   return (
-    <label className="setting">
-      <span>英文语音</span>
-      <select
-        value={state.settings.voiceURI ?? ""}
-        onChange={(e) => update((st) => ({ ...st, settings: { ...st.settings, voiceURI: e.target.value || undefined } }))}
-      >
-        <option value="">自动（优先美式）</option>
-        {voices.map((v) => (
-          <option key={v.voiceURI} value={v.voiceURI}>
-            {v.name} · {v.lang}
-          </option>
-        ))}
-      </select>
-    </label>
+    <div className="voice-picker" data-testid="voice-picker">
+      {voices.length === 0 ? (
+        <div className="banner warn">没有找到英文语音。听力题会提示改做文字题。</div>
+      ) : (
+        <label className="setting">
+          <span>英文语音</span>
+          <select
+            value={state.settings.voiceURI ?? ""}
+            onChange={(e) => update((st) => ({ ...st, settings: { ...st.settings, voiceURI: e.target.value || undefined } }))}
+          >
+            <option value="">自动（优先高级版的美式语音）</option>
+            {voices.map((v) => (
+              <option key={v.voiceURI} value={v.voiceURI}>
+                {name(v)}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <p className="muted small">
+        正在使用：{using ? name(using) : "系统默认"}。浏览器提供了 {all} 个语音，其中英文 {voices.length} 个、高级版或增强版 {good} 个。
+      </p>
+      <div className="row wrap">
+        <button
+          type="button"
+          className="btn-secondary small"
+          onClick={() => speak("The woman is reaching for a cup on the shelf.", speechOptions(state.settings)).then((r) => setMsg(r.ok ? null : r.reason))}
+        >
+          试听
+        </button>
+        <button
+          type="button"
+          className="btn-secondary small"
+          disabled={busy}
+          onClick={() => read(true).then((v) => setMsg(`已重新读取：共 ${v.length} 个语音，英文 ${englishVoices(v).length} 个。`))}
+        >
+          {busy ? "正在读取…" : "重新读取语音列表"}
+        </button>
+      </div>
+      {msg && <p className="muted small">{msg}</p>}
+      {good === 0 && (
+        <p className="muted small">
+          下载了高级版语音但这里没有？先完全关掉网页再打开，或点「重新读取」。如果还是没有，说明 iOS 没有把这个语音提供给网页（Safari 会限制部分语音），只能用列表里已有的。
+        </p>
+      )}
+      <details>
+        <summary>浏览器提供的全部英文语音（排查用）</summary>
+        <ul className="plain voice-list">
+          {voices.map((v) => (
+            <li key={v.voiceURI}>
+              <b>{v.name}</b> · {v.lang} · {QUALITY_LABEL[voiceQuality(v)]}
+              {v.localService ? " · 本机" : " · 联网"}
+              <div className="muted small">{v.voiceURI}</div>
+            </li>
+          ))}
+        </ul>
+      </details>
+    </div>
   );
 }

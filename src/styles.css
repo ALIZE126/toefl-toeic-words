@@ -420,3 +420,6 @@ ul.plain { list-style: none; padding: 0; margin: 0; display: flex; flex-directio
   .grid2 { flex-direction: column; }
   .field.narrow { flex: 1; }
 }
+.voice-picker { border-top: 1px solid var(--line); }
+.voice-picker .setting { border-top: 0; }
+.voice-list .small { overflow-wrap: anywhere; }
