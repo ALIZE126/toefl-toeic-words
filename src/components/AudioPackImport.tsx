@@ -126,7 +126,7 @@ export default function AudioPackImport() {
       <p className="target-line">
         本机已有 AI 语音 <b>{count}</b> 条。有 AI 语音的句子会播放音频，其余仍用系统语音。
       </p>
-      <p className="hint">选择用 scripts/part1-audio.mjs 生成的 toeic-part1-audio-pack.zip。语音保存在本机浏览器里，换设备或换网址需要再导入一次。</p>
+      <p className="hint">选择用 scripts/part1-audio.mjs 生成的 words-audio-pack.zip。语音保存在本机浏览器里，换设备或换网址需要再导入一次。</p>
       <button type="button" className="btn-primary" disabled={!!busy} onClick={() => fileRef.current?.click()}>
         {busy ?? "选择音频包 .zip"}
       </button>

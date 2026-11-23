@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
- * 用 ElevenLabs 为托业 Part 1 图片包里的句子和短语生成 AI 语音，打成「Part 1 音频包」ZIP。
+ * 用 ElevenLabs 生成 AI 语音，打成音频包 ZIP（在 App 的「词库 → 导入 → AI 语音包」导入）。
+ * 内容：托业 Part 1 图片包的句子和短语、生词本（.docx）里的单词、内置练习例句、拼写复习备用句。
  *
- *   node scripts/part1-audio.mjs [图片包.zip] [输出.zip]
+ *   node scripts/part1-audio.mjs [图片包.zip] [输出.zip] [生词本.docx]
  *
  * - API key 从 ~/.config/words-tts.env 读取（ELEVENLABS_API_KEY 或 ELEVENLAB_API_KEY），不会写进项目或音频包。
  * - 已生成的音频缓存在 fixtures/tts-cache/，中断后重跑只生成缺少的，不重复扣额度。
@@ -17,7 +18,8 @@ import JSZip from "jszip";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PACK = resolve(process.argv[2] ?? join(ROOT, "fixtures/toeic-part1-image-pack.zip"));
-const OUT = resolve(process.argv[3] ?? join(ROOT, "fixtures/toeic-part1-audio-pack.zip"));
+const OUT = resolve(process.argv[3] ?? join(ROOT, "fixtures/words-audio-pack.zip"));
+const DOCX = resolve(process.argv[4] ?? join(ROOT, "fixtures/生词本.docx"));
 const CACHE = join(ROOT, "fixtures/tts-cache");
 const MODEL = "eleven_multilingual_v2";
 const FORMAT = "mp3_44100_64";
@@ -65,6 +67,28 @@ async function collectTexts() {
     add(p.standard_phrase, "phrase");
   }
   for (const g of d.image_pack?.graded_photo_questions ?? []) for (const q of g.questions ?? []) add(q.audio_text, "graded");
+
+  // 生词本里的单词（读原始单词；已知拼写错误另外加上正确写法）
+  if (existsSync(DOCX)) {
+    const x = await (await JSZip.loadAsync(readFileSync(DOCX))).file("word/document.xml").async("string");
+    const unesc = (t) => t.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
+    const rows = x.match(/<w:tr\b[^P][\s\S]*?<\/w:tr>/g) ?? [];
+    for (const r of rows) {
+      const cell = (r.match(/<w:tc>[\s\S]*?<\/w:tc>/g) ?? [])[1];
+      if (!cell) continue;
+      const w = unesc((cell.match(/<w:t(?: [^>]*)?>([^<]*)<\/w:t>/g) ?? []).map((t) => t.replace(/<[^>]+>/g, "")).join("")).trim();
+      if (/[a-z]/i.test(w) && !/^word$/i.test(w)) add(w, "word");
+    }
+    add("permanent", "word");
+  }
+  // 内置练习例句（学习句 / 复测句）和拼写复习的备用句
+  for (const f of ["src/data/curated.ts", "src/data/passages.ts"]) {
+    const src = readFileSync(join(ROOT, f), "utf8");
+    for (const m of src.matchAll(/\btext:\s*"((?:[^"\\]|\\.)+)"/g)) {
+      const t = m[1].replace(/\\(.)/g, "$1");
+      if (t.split(/\s+/).length >= 3 && t.length < 200) add(t, f.includes("curated") ? "example" : "spelling");
+    }
+  }
   return [...texts.entries()].map(([key, v]) => ({ key, text: v.text, kinds: [...v.kinds] }));
 }
 
@@ -130,7 +154,7 @@ async function main() {
     created: new Date().toISOString(),
     provider: "ElevenLabs",
     model: MODEL,
-    note: "AI 合成语音，用于托业 Part 1 图片包里的句子和短语",
+    note: "AI 合成语音：托业 Part 1 句子和短语、生词本单词、内置例句",
     voices: VOICES.map(({ name, accent, gender }) => ({ name, accent, gender })),
     items: [],
   };
