@@ -45,9 +45,9 @@ export function emptyState(): AppState {
   };
 }
 
-export function loadState(storage: Storage = localStorage): AppState {
+/** 把存下来的 JSON 解析成状态（旧版本自动迁移，迁移前留副本） */
+export function parseStored(raw: string | null, storage: Storage = localStorage): AppState {
   try {
-    const raw = storage.getItem(STORAGE_KEY);
     if (!raw) return emptyState();
     const parsed = JSON.parse(raw) as AppState;
     if (parsed?.version !== 1 || typeof parsed.entries !== "object") return emptyState();
@@ -59,9 +59,20 @@ export function loadState(storage: Storage = localStorage): AppState {
   }
 }
 
-export function saveState(state: AppState, storage: Storage = localStorage): string | null {
+/** 同步读取 localStorage（测试和没有 IndexedDB 时用；正式启动见 stateDb.loadStateAsync） */
+export function loadState(storage: Storage = localStorage): AppState {
+  let raw: string | null = null;
   try {
-    storage.setItem(STORAGE_KEY, JSON.stringify(state));
+    raw = storage.getItem(STORAGE_KEY);
+  } catch {
+    raw = null;
+  }
+  return parseStored(raw, storage);
+}
+
+export function saveState(state: AppState, storage: Storage = localStorage, json = JSON.stringify(state)): string | null {
+  try {
+    storage.setItem(STORAGE_KEY, json);
     return null;
   } catch (e) {
     return e instanceof Error && e.name === "QuotaExceededError" ? "浏览器存储空间已满，进度未能保存。请导出备份。" : "进度保存失败";

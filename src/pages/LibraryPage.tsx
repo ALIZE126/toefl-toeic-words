@@ -9,11 +9,12 @@ import { Pill } from "../components/common";
 import EntryEditor from "../components/EntryEditor";
 import Part1ImportPanel from "../components/Part1ImportPanel";
 import AudioPackImport from "../components/AudioPackImport";
+import ReadingVocabImport from "../components/ReadingVocabImport";
 import { hasPart1, part1Categories } from "../lib/part1";
 import { useNav } from "../components/nav";
 import Icon from "../components/Icon";
 
-type Filter = "all" | "recent" | "curated" | "learning" | "spelling" | "noexample" | "part1" | "p1:人物动作" | "p1:物体状态" | "p1:位置关系";
+type Filter = "all" | "rv" | "rv:先背" | "rv:进阶" | "rv:话题识别" | "recent" | "curated" | "learning" | "spelling" | "noexample" | "part1" | "p1:人物动作" | "p1:物体状态" | "p1:位置关系";
 
 const FILTERS: { id: Filter; label: string }[] = [
   { id: "all", label: "全部" },
@@ -45,6 +46,7 @@ export default function LibraryPage({ state, update, today }: { state: AppState;
   const lastAdd = state.imports.slice(1).reverse().find((r) => r.added > 0);
   const total = scoped.order.length;
   const p1Count = scoped.order.filter((id) => hasPart1(scoped.entries[id])).length;
+  const rvCount = (tier?: string) => scoped.order.filter((id) => scoped.entries[id]?.reading && (!tier || scoped.entries[id].reading!.tier === tier)).length;
 
   const list = useMemo(() => {
     const kw = q.trim().toLowerCase();
@@ -64,6 +66,12 @@ export default function LibraryPage({ state, update, today }: { state: AppState;
         )
           return false;
         switch (filter) {
+          case "rv":
+            return !!e.reading;
+          case "rv:先背":
+          case "rv:进阶":
+          case "rv:话题识别":
+            return e.reading?.tier === filter.slice(3);
           case "part1":
             return hasPart1(e);
           case "p1:人物动作":
@@ -110,6 +118,12 @@ export default function LibraryPage({ state, update, today }: { state: AppState;
   const filters = [
     ...FILTERS.slice(0, 1),
     ...(lastAdd ? [{ id: "recent" as Filter, label: `本次新增 ${lastAdd.added}` }] : []),
+    ...(rvCount()
+      ? (["rv", "rv:先背", "rv:进阶", "rv:话题识别"] as Filter[]).map((id) => ({
+          id,
+          label: id === "rv" ? `阅读词汇册 (${rvCount()})` : `${id.slice(3)} (${rvCount(id.slice(3))})`,
+        }))
+      : []),
     ...(p1Count
       ? (["part1", "p1:人物动作", "p1:物体状态", "p1:位置关系"] as Filter[]).map((id) => ({
           id,
@@ -180,6 +194,7 @@ export default function LibraryPage({ state, update, today }: { state: AppState;
                     </span>
                     <span className="wr-tags">
                       {viewDeck === "all" && entryDecks(e).map((d) => <Pill key={d}>{DECK_NAME[d]}</Pill>)}
+                      {e.reading && <Pill tone="info">阅读 · {e.reading.tier}</Pill>}
                       {hasPart1(e) && <Pill tone="info">Part 1</Pill>}
                       {e.curated && <Pill tone="info">已配练习</Pill>}
                       {e.senses.length > 1 && <Pill>{e.senses.length} 个义项</Pill>}
@@ -216,7 +231,7 @@ function StatusPill({ state, entryId, today }: { state: AppState; entryId: strin
 function ImportPanel({ state, update, onClose, onShowRecent }: { state: AppState; update: Update; onClose: () => void; onShowRecent: () => void }) {
   const nav = useNav();
   const viewDeck = state.settings.deck;
-  const [kind, setKind] = useState<"docx" | "part1" | "audio">(nav.route.sub === "import-part1" ? "part1" : "docx");
+  const [kind, setKind] = useState<"docx" | "reading" | "part1" | "audio">(nav.route.sub === "import-part1" ? "part1" : "docx");
   const [report, setReport] = useState<ImportReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -254,6 +269,9 @@ function ImportPanel({ state, update, onClose, onShowRecent }: { state: AppState
           <button type="button" role="tab" aria-selected={kind === "docx"} className="filter" aria-pressed={kind === "docx"} onClick={() => setKind("docx")}>
             Word 生词本
           </button>
+          <button type="button" role="tab" aria-selected={kind === "reading"} className="filter" aria-pressed={kind === "reading"} onClick={() => setKind("reading")}>
+            托福阅读词汇册
+          </button>
           <button type="button" role="tab" aria-selected={kind === "part1"} className="filter" aria-pressed={kind === "part1"} onClick={() => setKind("part1")}>
             Part 1 图片包
           </button>
@@ -272,6 +290,8 @@ function ImportPanel({ state, update, onClose, onShowRecent }: { state: AppState
         <Part1ImportPanel state={state} update={update} />
       ) : kind === "audio" ? (
         <AudioPackImport />
+      ) : kind === "reading" ? (
+        <ReadingVocabImport state={state} update={update} onShowRecent={onShowRecent} />
       ) : (
         <div className="import-body">
           <fieldset className="import-mode">

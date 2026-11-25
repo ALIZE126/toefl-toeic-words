@@ -24,3 +24,5 @@ export function packZip(): Uint8Array {
 }
 
 export const AUDIO_PACK_PATH = resolve(__dirname, "../fixtures/toeic-part1-audio-pack.zip");
+
+export const READING_PATH = resolve(__dirname, "../fixtures/阅读词汇数据.json");

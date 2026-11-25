@@ -232,17 +232,21 @@ export function dueTracks(state: AppState, day: string): TrackState[] {
 /** 可以初学的义项：有学习句、还没建立轨道。配好练习的词条排在前面 */
 export function newCandidates(state: AppState): { entryId: string; senseId: string }[] {
   const learned = new Set(Object.values(state.tracks).map((t) => t.senseId));
-  const out: { entryId: string; senseId: string; curated: boolean; i: number }[] = [];
+  const out: { entryId: string; senseId: string; curated: boolean; tier: number; i: number }[] = [];
   state.order.forEach((id, i) => {
     const e = state.entries[id];
     if (!e) return;
     for (const s of e.senses) {
-      if (!learned.has(s.id) && senseReady(s).learn) out.push({ entryId: id, senseId: s.id, curated: e.curated, i });
+      if (!learned.has(s.id) && senseReady(s).learn)
+        out.push({ entryId: id, senseId: s.id, curated: e.curated, tier: e.reading ? READING_RANK[e.reading.tier] : 3, i });
     }
   });
-  out.sort((a, b) => Number(b.curated) - Number(a.curated) || a.i - b.i);
+  // 内置练习词 → 阅读词汇册（先背 → 进阶 → 话题识别）→ 其他，同组按词库顺序
+  out.sort((a, b) => Number(b.curated) - Number(a.curated) || a.tier - b.tier || a.i - b.i);
   return out.map(({ entryId, senseId }) => ({ entryId, senseId }));
 }
+
+const READING_RANK = { 先背: 0, 进阶: 1, 话题识别: 2 } as const;
 
 export function learnedToday(state: AppState, day: string): number {
   return state.logs.filter((l) => l.kind === "learn" && l.day === day).length;

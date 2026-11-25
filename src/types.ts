@@ -112,6 +112,8 @@ export interface Entry {
   curated: boolean;
   /** 所在词库 */
   decks: DeckId[];
+  /** 来自托福阅读词汇册 */
+  reading?: ReadingInfo;
   source: { file: string; row: number; firstImportedAt: string; lastImportedAt: string };
   createdAt: string;
   updatedAt: string;
@@ -120,6 +122,23 @@ export interface Entry {
 /** 词库：托福 / 托业。一个词可以同时属于两个词库，复习进度共享 */
 export type DeckId = "toefl" | "toeic";
 export type DeckFilter = DeckId | "all";
+
+export type ReadingTier = "先背" | "进阶" | "话题识别";
+
+export interface ReadingInfo {
+  itemId: string;
+  tier: ReadingTier;
+  /** 在题库里出现的篇数 */
+  count: number;
+  /** 题库总篇数 */
+  materials?: number;
+  rank?: number;
+  forms: string[];
+  glossType?: string;
+  sourceTitle?: string;
+  sourceKind?: string;
+  kind: "word" | "phrase";
+}
 
 export type Grade = "pass" | "hard" | "fail";
 

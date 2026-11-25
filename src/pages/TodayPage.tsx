@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { AppState, TrackKind } from "../types";
 import type { Update } from "../store";
 import { buildQueue, dueTracks, newCandidates, newQuota } from "../lib/scheduler";
+import { addDays } from "../lib/util";
 import { DECK_NAME, scopeState } from "../lib/decks";
 import { QUALITY_LABEL, currentVoice, englishVoices, isAppleMobile, loadVoices, refreshVoices, speak, speechOptions, speechSupported, voiceQuality } from "../lib/speech";
 import { PASSAGES } from "../data/passages";
@@ -55,6 +56,9 @@ export default function TodayPage({ state, update, today }: Props) {
   const steps = buildQueue(scoped, today, { quota, exclude }).length;
   const finishedToday = state.session?.day === today && !active && (state.session?.queue.length ?? 0) > 0 && state.session?.scope !== "part1";
   const p1 = deck === "toefl" ? null : part1Counts(scoped, today);
+  // 明天会到期的复习：今天新学的都会在明天第一次复习
+  const tomorrowDue = dueTracks(scoped, addDays(today, 1)).filter((t) => !exclude?.includes(t.kind) && (t.due ?? "") > today).length;
+  const left = newCandidates(scoped).length;
   const sample = p1 && p1.phrases ? part1Items(scoped).find((x) => x.sense.part1?.image) : undefined;
 
   const start = () => {
@@ -115,6 +119,11 @@ export default function TodayPage({ state, update, today }: Props) {
                   .map(([n, c]) => `${n} ${c}`)
                   .join(" · ")
               : "今天没有到期的复习"}
+          </p>
+          <p className="muted small" data-testid="today-forecast">
+            还有 {left} 个义项没学
+            {fresh > 0 && `，按每天 ${state.settings.newPerDay} 个约 ${Math.ceil(left / Math.max(1, state.settings.newPerDay))} 天学完`}
+            ；明天已排定复习 {tomorrowDue} 张{fresh > 0 ? `，学完今天的新词后会再增加约 ${fresh} 张` : ""}。
           </p>
           <button type="button" className="btn-primary" disabled={steps === 0} onClick={start}>
             {steps === 0 ? "今天没有要学的了" : "开始今日学习"} {steps > 0 && <Icon name="arrow-right" />}
@@ -181,9 +190,9 @@ function Settings({ state, update }: { state: AppState; update: Update }) {
         <input
           type="number"
           min={0}
-          max={50}
+          max={500}
           value={s.newPerDay}
-          onChange={(e) => set({ newPerDay: Math.max(0, Math.min(50, Number(e.target.value) || 0)) })}
+          onChange={(e) => set({ newPerDay: Math.max(0, Math.min(500, Number(e.target.value) || 0)) })}
         />
       </label>
       <label className="setting">

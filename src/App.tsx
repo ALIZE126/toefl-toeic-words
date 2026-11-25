@@ -7,7 +7,7 @@ import StatsPage from "./pages/StatsPage";
 import PracticePage from "./pages/PracticePage";
 import { getToday, toDay } from "./lib/util";
 import { DECK_NAME, deckCount } from "./lib/decks";
-import type { DeckFilter } from "./types";
+import type { AppState, DeckFilter } from "./types";
 import { useAvoidHostBadge } from "./lib/hostBadge";
 import { loadAudioIndex } from "./lib/audioStore";
 import Icon, { type IconName } from "./components/Icon";
@@ -20,8 +20,8 @@ const TABS: { id: Tab; icon: IconName }[] = [
   { id: "records", icon: "chart" },
 ];
 
-export default function App() {
-  const { state, update, saveError } = useStore();
+export default function App({ initial }: { initial?: AppState } = {}) {
+  const { state, update, saveError } = useStore(initial);
   useAvoidHostBadge();
   const [route, setRoute] = useState<Route>({ tab: "today" });
   const [practice, setPractice] = useState<{ open: boolean; returnTo: Route }>({ open: false, returnTo: { tab: "today" } });

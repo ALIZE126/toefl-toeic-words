@@ -55,6 +55,18 @@ export default function EntryEditor({ entry, state, update, today, onClose }: Pr
           })}
           <span className="hint">（至少保留一个；同时在两个词库时进度共享）</span>
         </div>
+        {entry.reading && (
+          <div className="note" data-testid="reading-info">
+            <b>托福阅读词汇册 · {entry.reading.tier}</b>
+            <p>
+              出现于 {entry.reading.count}
+              {entry.reading.materials ? ` / ${entry.reading.materials}` : ""} 篇{entry.reading.sourceTitle ? ` · 例句出自 ${entry.reading.sourceTitle}` : ""}
+              {entry.reading.sourceKind ? `（${entry.reading.sourceKind}）` : ""}
+            </p>
+            {entry.reading.forms.length > 1 && <p className="muted small">词形：{entry.reading.forms.join(" / ")}</p>}
+            {entry.reading.glossType && <p className="muted small">释义：{entry.reading.glossType}</p>}
+          </div>
+        )}
         <div className="raw">
           <div>
             <span className="hint">词本原文（只读）：</span>
